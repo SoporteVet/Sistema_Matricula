@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Matrículas - InstitutoSMP</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Login Page -->
+        <div id="loginPage" class="page active">
+            <div class="login-container">
+                <div class="login-card">
+                    <div class="login-header">
+                        <h1><i class="fas fa-paw"></i> InstitutoSMP</h1>
+                        <p>Sistema de Gestión de Matrículas</p>
+                    </div>
+                    <form id="loginForm" class="login-form">
+                        <div class="input-group">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="email" placeholder="Correo electrónico" required>
+                        </div>
+                        <div class="input-group">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="password" placeholder="Contraseña" required>
+                        </div>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                        </button>
+                    </form>
+                    <div id="loginError" class="error-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div id="dashboardPage" class="page">
+            <header class="header">
+                <div class="header-content">
+                    <h1><i class="fas fa-paw"></i> InstitutoSMP</h1>
+                    <div class="user-info">
+                        <span id="userEmail"></span>
+                        <span id="userRole" class="role-badge"></span>
+                        <button id="logoutBtn" class="btn-secondary">
+                            <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-container">
+                <nav class="sidebar">
+                    <ul class="nav-menu">
+                        <li><a href="#" data-section="dashboard" class="nav-link active">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a></li>
+                        <li class="admin-only"><a href="#" data-section="courses" class="nav-link">
+                            <i class="fas fa-book"></i> Cursos Veterinarios
+                        </a></li>
+                        <li><a href="#" data-section="students" class="nav-link">
+                            <i class="fas fa-user-graduate"></i> Estudiantes Veterinarios
+                        </a></li>
+                        <li><a href="#" data-section="groups" class="nav-link">
+                            <i class="fas fa-users"></i> Grupos
+                        </a></li>
+                        <li><a href="#" data-section="payments" class="nav-link">
+                            <i class="fas fa-credit-card"></i> Pagos
+                        </a></li>
+                        <li><a href="#" data-section="attendance" class="nav-link">
+                            <i class="fas fa-calendar-check"></i> Asistencia
+                        </a></li>
+                        <li><a href="#" data-section="academic-history" class="nav-link">
+                            <i class="fas fa-graduation-cap"></i> Historial Académico
+                        </a></li>
+                        <li><a href="#" data-section="reports" class="nav-link">
+                            <i class="fas fa-chart-bar"></i> Reportes
+                        </a></li>
+                        <li class="admin-only"><a href="#" data-section="users" class="nav-link">
+                            <i class="fas fa-users-cog"></i> Usuarios
+                        </a></li>
+                    </ul>
+                </nav>
+
+                <main class="main-content">
+                    <!-- Dashboard Section -->
+                    <section id="dashboard" class="content-section active">
+                        <h2>Dashboard</h2>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <i class="fas fa-user-graduate"></i>
+                                <div class="stat-info">
+                                    <h3 id="totalStudents">0</h3>
+                                    <p>Estudiantes Activos</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-book"></i>
+                                <div class="stat-info">
+                                    <h3 id="totalCourses">0</h3>
+                                    <p>Cursos Disponibles</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-dollar-sign"></i>
+                                <div class="stat-info">
+                                    <h3 id="monthlyRevenue">$0</h3>
+                                    <p>Ingresos del Mes</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <div class="stat-info">
+                                    <h3 id="pendingPayments">0</h3>
+                                    <p>Pagos Pendientes</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-charts">
+                            <div class="chart-container">
+                                <h3>Estudiantes por Curso</h3>
+                                <canvas id="studentsChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h3>Estado de Pagos</h3>
+                                <canvas id="paymentsChart"></canvas>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Courses Section -->
+                    <section id="courses" class="content-section">
+                        <div class="section-header">
+                            <h2>Gestión de Cursos Veterinarios</h2>
+                            <button id="addCourseBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nuevo Curso
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="coursesTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nombre</th>
+                                        <th>Descripción</th>
+                                        <th>Precio</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Students Section -->
+                    <section id="students" class="content-section">
+                        <div class="section-header">
+                            <h2>Gestión de Estudiantes Veterinarios</h2>
+                            <button id="addStudentBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nuevo Estudiante
+                            </button>
+                        </div>
+                        <div class="filters">
+                            <select id="courseFilter">
+                                <option value="">Todos los cursos</option>
+                            </select>
+                            <input type="text" id="studentSearch" placeholder="Buscar estudiante...">
+                        </div>
+                        <div class="table-container">
+                            <table id="studentsTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Cédula</th>
+                                        <th>Nombre</th>
+                                        <th>Email</th>
+                                        <th>Teléfono</th>
+                                        <th>Curso</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Payments Section -->
+                    <section id="payments" class="content-section">
+                        <div class="section-header">
+                            <h2>Control de Pagos</h2>
+                            <button id="addPaymentBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Registrar Pago
+                            </button>
+                        </div>
+                        <div class="filters">
+                            <select id="paymentCourseFilter">
+                                <option value="">Todos los cursos</option>
+                            </select>
+                            <select id="paymentStatusFilter">
+                                <option value="">Todos los estados</option>
+                                <option value="paid">Pagado</option>
+                                <option value="pending">Pendiente</option>
+                                <option value="overdue">Atrasado</option>
+                            </select>
+                            <input type="month" id="paymentMonthFilter">
+                        </div>
+                        <div class="table-container">
+                            <table id="paymentsTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estudiante</th>
+                                        <th>Curso</th>
+                                        <th>Mes</th>
+                                        <th>Monto</th>
+                                        <th>Estado</th>
+                                        <th>Fecha Pago</th>
+                                        <th>Método de Pago</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Attendance Section -->
+                    <section id="attendance" class="content-section">
+                        <div class="section-header">
+                            <h2>Control de Asistencia</h2>
+                            <button id="markAttendanceBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Marcar Asistencia
+                            </button>
+                        </div>
+                        <div class="filters">
+                            <select id="attendanceCourseFilter">
+                                <option value="">Seleccionar curso</option>
+                            </select>
+                            <input type="date" id="attendanceDate">
+                        </div>
+                        <div class="table-container">
+                            <table id="attendanceTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estudiante</th>
+                                        <th>Curso</th>
+                                        <th>Fecha</th>
+                                        <th>Estado</th>
+                                        <th>Observaciones</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Groups Section -->
+                    <section id="groups" class="content-section">
+                        <div class="section-header">
+                            <h2>Gestión de Grupos</h2>
+                            <button id="addGroupBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nuevo Grupo
+                            </button>
+                        </div>
+                        <div class="filters">
+                            <select id="groupCourseFilter">
+                                <option value="">Todos los cursos</option>
+                            </select>
+                            <select id="groupPeriodFilter">
+                                <option value="">Todos los períodos</option>
+                                <option value="semestral">Semestral</option>
+                                <option value="cuatrimestral">Cuatrimestral</option>
+                                <option value="trimestral">Trimestral</option>
+                                <option value="anual">Anual</option>
+                            </select>
+                        </div>
+                        <div class="table-container">
+                            <table id="groupsTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nombre</th>
+                                        <th>Curso</th>
+                                        <th>Período</th>
+                                        <th>Año</th>
+                                        <th>Estudiantes</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Academic History Section -->
+                    <section id="academic-history" class="content-section">
+                        <div class="section-header">
+                            <h2>Historial Académico</h2>
+                        </div>
+                        <div class="filters">
+                            <select id="historyStudentFilter">
+                                <option value="">Todos los estudiantes</option>
+                            </select>
+                            <select id="historyCourseFilter">
+                                <option value="">Todos los cursos</option>
+                            </select>
+                            <select id="historyStatusFilter">
+                                <option value="">Todos los estados</option>
+                                <option value="active">Activo</option>
+                                <option value="inactive">Inactivo</option>
+                                <option value="graduated">Graduado</option>
+                                <option value="dropped">Abandonó</option>
+                            </select>
+                        </div>
+                        <div class="table-container">
+                            <table id="academicHistoryTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Estudiante</th>
+                                        <th>Curso</th>
+                                        <th>Grupo</th>
+                                        <th>Estado</th>
+                                        <th>Promedio</th>
+                                        <th>Pagos</th>
+                                        <th>Asistencia</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Reports Section -->
+                    <section id="reports" class="content-section">
+                        <h2>Reportes y Exportación</h2>
+                        <div class="reports-grid">
+                            <div class="report-card">
+                                <h3><i class="fas fa-chart-line"></i> Reporte Financiero</h3>
+                                <p>Generar reporte de ingresos y pagos</p>
+                                <button class="btn-primary" data-report="financial">Generar</button>
+                            </div>
+                            <div class="report-card">
+                                <h3><i class="fas fa-users"></i> Reporte de Estudiantes</h3>
+                                <p>Lista completa de estudiantes por curso</p>
+                                <button class="btn-primary" data-report="students">Generar</button>
+                            </div>
+                            <div class="report-card">
+                                <h3><i class="fas fa-calendar-alt"></i> Reporte de Asistencia</h3>
+                                <p>Control de asistencia por período</p>
+                                <button class="btn-primary" data-report="attendance">Generar</button>
+                            </div>
+                            <div class="report-card">
+                                <h3><i class="fas fa-graduation-cap"></i> Historial Académico</h3>
+                                <p>Historial completo por estudiante</p>
+                                <button class="btn-primary" data-report="academic">Generar</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Users Section (Admin Only) -->
+                    <section id="users" class="content-section">
+                        <div class="section-header">
+                            <h2>Gestión de Usuarios</h2>
+                            <button id="addUserBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nuevo Usuario
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="usersTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Rol</th>
+                                        <th>Estado</th>
+                                        <th>Fecha Creación</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div id="modalContent" class="modal-content"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script type="module" src="js/permissions.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/dashboard.js"></script>
+    <script type="module" src="js/courses.js"></script>
+    <script type="module" src="js/students.js"></script>
+    <script type="module" src="js/payments.js"></script>
+    <script type="module" src="js/attendance.js"></script>
+    <script type="module" src="js/groups.js"></script>
+    <script type="module" src="js/academic-history.js"></script>
+    <script type="module" src="js/reports.js"></script>
+    <script type="module" src="js/users.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
