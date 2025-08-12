@@ -1,0 +1,943 @@
+import { 
+    ref, 
+    push, 
+    set, 
+    get, 
+    remove, 
+    onValue 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { db } from './firebase-config.js';
+
+class StudentsManager {
+    constructor() {
+        this.students = {};
+        this.filteredStudents = {};
+        this.courses = {};
+        this.init();
+    }
+
+    async init() {
+        this.setupEventListeners();
+        await this.loadStudents();
+        await this.loadCourseOptions();
+    }
+
+    setupEventListeners() {
+        // Botón para agregar nuevo estudiante
+        const addStudentBtn = document.getElementById('addStudentBtn');
+        if (addStudentBtn) {
+            addStudentBtn.addEventListener('click', () => {
+                this.showStudentModal();
+            });
+        }
+
+        // Filtros
+        const courseFilter = document.getElementById('courseFilter');
+        if (courseFilter) {
+            courseFilter.addEventListener('change', () => {
+                this.applyFilters();
+            });
+        }
+
+        const studentSearch = document.getElementById('studentSearch');
+        if (studentSearch) {
+            studentSearch.addEventListener('input', () => {
+                this.applyFilters();
+            });
+        }
+
+        // Configurar actualización en tiempo real
+        this.setupRealTimeUpdates();
+    }
+
+    setupRealTimeUpdates() {
+        const studentsRef = ref(db, 'students');
+        onValue(studentsRef, (snapshot) => {
+            if (snapshot.exists()) {
+                this.students = snapshot.val();
+                this.applyFilters();
+            } else {
+                this.students = {};
+                this.renderStudentsTable();
+            }
+        });
+    }
+
+    async loadStudents() {
+        try {
+            const studentsRef = ref(db, 'students');
+            const snapshot = await get(studentsRef);
+            
+            if (snapshot.exists()) {
+                this.students = snapshot.val();
+            } else {
+                this.students = {};
+            }
+            
+            this.applyFilters();
+        } catch (error) {
+            console.error('Error al cargar estudiantes:', error);
+            if (window.app) {
+                window.app.showNotification('Error al cargar estudiantes', 'error');
+            }
+        }
+    }
+
+    async loadCourseOptions() {
+        try {
+            console.log('Iniciando carga de cursos...');
+            const coursesRef = ref(db, 'courses');
+            const snapshot = await get(coursesRef);
+            
+            if (snapshot.exists()) {
+                this.courses = snapshot.val();
+                console.log('Cursos cargados:', this.courses);
+                console.log('Número de cursos:', Object.keys(this.courses).length);
+                
+                // Verificar el estado de los cursos
+                const activeCourses = Object.values(this.courses).filter(course => course.status === 'active');
+                console.log('Cursos activos:', activeCourses.length);
+                console.log('Detalles de cursos activos:', activeCourses);
+                
+                // Verificar cada curso individualmente
+                Object.entries(this.courses).forEach(([id, course]) => {
+                    console.log(`Curso ${id}:`, course.name, 'Status:', course.status);
+                });
+            } else {
+                console.log('No se encontraron cursos en la base de datos');
+                this.courses = {};
+            }
+            
+            this.updateCourseSelects();
+        } catch (error) {
+            console.error('Error al cargar cursos:', error);
+            this.courses = {};
+        }
+    }
+
+    updateCourseSelects() {
+        const courseFilter = document.getElementById('courseFilter');
+        
+        if (courseFilter) {
+            const activeCourses = Object.values(this.courses)
+                .filter(course => course.status === 'active');
+            
+            courseFilter.innerHTML = '<option value="">Todos los cursos</option>' +
+                activeCourses.map(course => 
+                    `<option value="${course.name}">${course.name}</option>`
+                ).join('');
+        }
+    }
+
+    applyFilters() {
+        const courseFilter = document.getElementById('courseFilter')?.value || '';
+        const searchText = document.getElementById('studentSearch')?.value.toLowerCase() || '';
+
+        this.filteredStudents = Object.fromEntries(
+            Object.entries(this.students).filter(([id, student]) => {
+                const matchesCourse = !courseFilter || student.course === courseFilter;
+                const matchesSearch = !searchText || 
+                    student.firstName.toLowerCase().includes(searchText) ||
+                    student.lastName.toLowerCase().includes(searchText) ||
+                    student.email.toLowerCase().includes(searchText) ||
+                    student.studentId.toLowerCase().includes(searchText);
+                
+                return matchesCourse && matchesSearch;
+            })
+        );
+
+        this.renderStudentsTable();
+    }
+
+    renderStudentsTable() {
+        const tbody = document.querySelector('#studentsTable tbody');
+        if (!tbody) return;
+
+        const studentsToShow = Object.keys(this.filteredStudents).length > 0 ? 
+            this.filteredStudents : this.students;
+
+        if (Object.keys(studentsToShow).length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center">
+                        <div style="padding: 40px; color: #6c757d;">
+                            <i class="fas fa-user-graduate fa-3x mb-3"></i>
+                            <h4>No hay estudiantes veterinarios registrados</h4>
+                            <p>Comience agregando un nuevo estudiante veterinario</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = Object.entries(studentsToShow)
+            .map(([id, student]) => `
+                <tr>
+                    <td><strong>${student.studentId}</strong></td>
+                    <td>${student.cedula || 'N/A'}</td>
+                    <td>${student.firstName} ${student.lastName}</td>
+                    <td>${student.email}</td>
+                    <td>${this.formatPhone(student.phone)}</td>
+                    <td>${student.course}</td>
+                    <td>
+                        <span class="status-badge ${student.status}">
+                            ${this.getStatusText(student.status)}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn-warning" onclick="window.studentsManager.editStudent('${id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-danger" onclick="window.studentsManager.deleteStudent('${id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="btn-success" onclick="window.studentsManager.viewStudentDetails('${id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+    }
+
+    showStudentModal(studentId = null) {
+        const student = studentId ? this.students[studentId] : null;
+        const isEdit = student !== null;
+
+        // Verificar que los cursos estén cargados
+        if (Object.keys(this.courses).length === 0) {
+            console.log('Cursos no cargados, recargando...');
+            this.loadCourseOptions().then(() => {
+                // Recursivamente llamar a showStudentModal después de cargar los cursos
+                this.showStudentModal(studentId);
+            });
+            return;
+        }
+
+        const activeCourses = Object.values(this.courses)
+            .filter(course => course.status === 'active');
+
+        // Debug: mostrar los cursos disponibles
+        console.log('Cursos disponibles:', this.courses);
+        console.log('Cursos activos:', activeCourses);
+
+        // Verificar que hay cursos disponibles
+        if (activeCourses.length === 0) {
+            if (window.app) {
+                window.app.showModal(`
+                    <div class="modal-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> No hay cursos disponibles</h3>
+                        <button class="close-modal"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <p>No se pueden crear estudiantes sin cursos veterinarios activos.</p>
+                        <p>Por favor, primero cree al menos un curso veterinario.</p>
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button class="btn-primary" onclick="window.app.closeModal(); window.app.navigateToSection('courses');">
+                                <i class="fas fa-book"></i> Ir a Cursos
+                            </button>
+                        </div>
+                    </div>
+                `);
+            }
+            return;
+        }
+
+        const modalContent = `
+            <div class="modal-header">
+                                    <h3>
+                        <i class="fas fa-user-graduate"></i> 
+                        ${isEdit ? 'Editar' : 'Nuevo'} Estudiante Veterinario
+                    </h3>
+                <button class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="studentForm" class="handled">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="studentId">ID del Estudiante *</label>
+                        <input 
+                            type="text" 
+                            id="studentId" 
+                            value="${student?.studentId || ''}" 
+                            required
+                            placeholder="Ej: EST001"
+                            ${isEdit ? 'readonly' : ''}
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="studentCedula">Cédula *</label>
+                        <input 
+                            type="text" 
+                            id="studentCedula" 
+                            value="${student?.cedula || ''}" 
+                            required
+                            placeholder="Ej: 123456789"
+                            pattern="[0-9]{9,12}"
+                            title="La cédula debe tener entre 9 y 12 dígitos numéricos"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="studentCourse">Curso Veterinario *</label>
+                        <select id="studentCourse" required>
+                            <option value="">Seleccionar curso veterinario</option>
+                            ${activeCourses.map(course => `
+                                <option value="${course.name}" ${student?.course === course.name ? 'selected' : ''}>
+                                    ${course.name}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="firstName">Nombre *</label>
+                        <input 
+                            type="text" 
+                            id="firstName" 
+                            value="${student?.firstName || ''}" 
+                            required
+                            placeholder="Nombre"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="lastName">Apellidos *</label>
+                        <input 
+                            type="text" 
+                            id="lastName" 
+                            value="${student?.lastName || ''}" 
+                            required
+                            placeholder="Apellidos"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email"
+                            value="${student?.email || ''}" 
+                            required
+                            placeholder="email@ejemplo.com"
+                            style="border: 2px solid #007bff; background-color: #f8f9fa;"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="phone">Teléfono</label>
+                        <input 
+                            type="tel" 
+                            id="phone" 
+                            value="${student?.phone || ''}" 
+                            placeholder="1234 5678"
+                            pattern="[0-9]{8}|[0-9]{2} [0-9]{4} [0-9]{4}|[0-9]{4}-[0-9]{4}"
+                            title="El teléfono debe tener 8 dígitos (ej: 72654651, 7265 4651, 7265-4651)"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="birthDate">Fecha de Nacimiento</label>
+                        <input 
+                            type="date" 
+                            id="birthDate" 
+                            value="${student?.birthDate || ''}"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="enrollmentDate">Fecha de Matrícula</label>
+                        <input 
+                            type="date" 
+                            id="enrollmentDate" 
+                            value="${student?.enrollmentDate || new Date().toISOString().slice(0, 10)}"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="address">Dirección</label>
+                        <textarea 
+                            id="address" 
+                            placeholder="Dirección completa..."
+                        >${student?.address || ''}</textarea>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="notes">Observaciones</label>
+                    <textarea 
+                        id="notes" 
+                        placeholder="Notas adicionales..."
+                    >${student?.notes || ''}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="studentStatus">Estado</label>
+                    <select id="studentStatus" required>
+                        <option value="active" ${student?.status === 'active' ? 'selected' : ''}>Activo</option>
+                        <option value="inactive" ${student?.status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+                        <option value="graduated" ${student?.status === 'graduated' ? 'selected' : ''}>Graduado</option>
+                        <option value="dropped" ${student?.status === 'dropped' ? 'selected' : ''}>Abandonó</option>
+                    </select>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> 
+                        ${isEdit ? 'Actualizar' : 'Crear'} Estudiante Veterinario
+                    </button>
+                </div>
+            </form>
+        `;
+
+        if (window.app) {
+            window.app.showModal(modalContent);
+            console.log('Modal mostrado, contenido:', modalContent);
+        }
+
+        // Configurar evento del formulario con un pequeño delay para asegurar que el modal esté renderizado
+        setTimeout(() => {
+            console.log('Timeout ejecutado, buscando formulario...');
+            const studentForm = document.getElementById('studentForm');
+            if (studentForm) {
+                console.log('Formulario encontrado, configurando evento submit');
+                console.log('Formulario HTML:', studentForm.outerHTML);
+                
+                // Verificar que todos los campos requeridos estén presentes
+                const requiredFields = ['studentId', 'studentCedula', 'firstName', 'lastName', 'email', 'studentCourse', 'enrollmentDate'];
+                const missingFields = requiredFields.filter(fieldId => !document.getElementById(fieldId));
+                
+                if (missingFields.length > 0) {
+                    console.error('Campos requeridos no encontrados:', missingFields);
+                } else {
+                    console.log('Todos los campos requeridos están presentes');
+                }
+                
+                // Verificar que el dropdown de cursos tenga opciones
+                const courseSelect = document.getElementById('studentCourse');
+                if (courseSelect) {
+                    const options = courseSelect.querySelectorAll('option');
+                    console.log('Opciones del dropdown de cursos:', options.length);
+                    if (options.length <= 1) { // Solo la opción por defecto
+                        console.error('El dropdown de cursos no tiene opciones válidas');
+                    }
+                }
+                
+                // Verificar el campo email específicamente
+                const emailField = document.getElementById('email');
+                if (emailField) {
+                    console.log('Campo email encontrado:', emailField);
+                    console.log('Valor del email:', emailField.value);
+                    console.log('Tipo del campo email:', emailField.type);
+                    console.log('Email field visible:', emailField.offsetParent !== null);
+                    console.log('Email field style:', emailField.style.cssText);
+                    console.log('Email field computed style:', window.getComputedStyle(emailField));
+                    
+                    // Agregar un evento de cambio para debug
+                    emailField.addEventListener('input', (e) => {
+                        console.log('Email field input event:', e.target.value);
+                    });
+                    
+                    // Agregar un evento de focus para debug
+                    emailField.addEventListener('focus', (e) => {
+                        console.log('Email field focused, value:', e.target.value);
+                    });
+                } else {
+                    console.error('Campo email NO encontrado');
+                }
+                
+                studentForm.addEventListener('submit', (e) => {
+                    try {
+                        console.log('Evento submit disparado');
+                        e.preventDefault();
+                        console.log('Formulario enviado, llamando a saveStudent');
+                        console.log('Evento submit capturado correctamente');
+                        
+                        // Debug: verificar todos los campos antes de enviar
+                        const formData = new FormData(studentForm);
+                        console.log('FormData entries:');
+                        for (let [key, value] of formData.entries()) {
+                            console.log(key, ':', value);
+                        }
+                        
+                        // Debug adicional: verificar email directamente del DOM
+                        const emailField = document.getElementById('email');
+                        if (emailField) {
+                            console.log('Email field en submit:', emailField);
+                            console.log('Email value en submit:', emailField.value);
+                            console.log('Email value length:', emailField.value.length);
+                        }
+                        
+                        this.saveStudent(studentId);
+                    } catch (error) {
+                        console.error('Error en el evento submit del formulario:', error);
+                        if (window.app) {
+                            window.app.showNotification('Error al procesar el formulario: ' + error.message, 'error');
+                        }
+                    }
+                });
+            } else {
+                console.error('No se pudo encontrar el formulario studentForm');
+            }
+        }, 100);
+    }
+
+    async saveStudent(studentId = null) {
+        const form = document.getElementById('studentForm');
+        if (!form) return;
+
+        // Debug: verificar que el formulario existe
+        console.log('Formulario encontrado:', form);
+
+        // Debug: verificar email field ANTES de capturar datos
+        const emailFieldBefore = document.getElementById('email');
+        console.log('=== EMAIL FIELD DEBUG ANTES ===');
+        if (emailFieldBefore) {
+            console.log('Email field encontrado antes de capturar datos');
+            console.log('Email field value antes:', emailFieldBefore.value);
+            console.log('Email field type antes:', emailFieldBefore.type);
+            console.log('Email field required antes:', emailFieldBefore.required);
+            console.log('Email field visible antes:', emailFieldBefore.offsetParent !== null);
+        } else {
+            console.error('Email field NO encontrado antes de capturar datos');
+        }
+        console.log('================================');
+
+        const studentData = {
+            studentId: document.getElementById('studentId').value.trim(),
+            cedula: document.getElementById('studentCedula').value.trim(),
+            firstName: document.getElementById('firstName').value.trim(),
+            lastName: document.getElementById('lastName').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            course: document.getElementById('studentCourse').value,
+            birthDate: document.getElementById('birthDate').value,
+            enrollmentDate: document.getElementById('enrollmentDate').value,
+            address: document.getElementById('address').value.trim(),
+            notes: document.getElementById('notes').value.trim(),
+            status: document.getElementById('studentStatus').value,
+            updatedAt: new Date().toISOString()
+        };
+
+        // Debug: mostrar los valores capturados
+        console.log('Datos del estudiante capturados:', studentData);
+        console.log('Email capturado específicamente:', studentData.email);
+        console.log('Email capturado tipo:', typeof studentData.email);
+        console.log('Email capturado longitud:', studentData.email ? studentData.email.length : 'undefined');
+        
+        // Debug: verificar que todos los elementos del formulario existen
+        const formElements = {
+            studentId: document.getElementById('studentId'),
+            studentCedula: document.getElementById('studentCedula'),
+            firstName: document.getElementById('firstName'),
+            lastName: document.getElementById('lastName'),
+            email: document.getElementById('email'),
+            phone: document.getElementById('phone'),
+            studentCourse: document.getElementById('studentCourse'),
+            birthDate: document.getElementById('birthDate'),
+            enrollmentDate: document.getElementById('enrollmentDate'),
+            address: document.getElementById('address'),
+            notes: document.getElementById('notes'),
+            studentStatus: document.getElementById('studentStatus')
+        };
+        
+        console.log('Elementos del formulario encontrados:', formElements);
+        
+        // Verificar si algún elemento no se encontró
+        const missingElements = Object.entries(formElements)
+            .filter(([name, element]) => !element)
+            .map(([name]) => name);
+            
+        if (missingElements.length > 0) {
+            console.error('Elementos del formulario no encontrados:', missingElements);
+            if (window.app) {
+                window.app.showNotification(`Error: Elementos del formulario no encontrados: ${missingElements.join(', ')}`, 'error');
+            }
+            return;
+        }
+
+        // Debug: verificar cada campo requerido individualmente
+        console.log('Verificación individual de campos requeridos:');
+        console.log('- studentId:', studentData.studentId, '¿Vacío?', !studentData.studentId);
+        console.log('- cedula:', studentData.cedula, '¿Vacío?', !studentData.cedula);
+        console.log('- firstName:', studentData.firstName, '¿Vacío?', !studentData.firstName);
+        console.log('- lastName:', studentData.lastName, '¿Vacío?', !studentData.lastName);
+        console.log('- email:', studentData.email, '¿Vacío?', !studentData.email);
+        console.log('- course:', studentData.course, '¿Vacío?', !studentData.course);
+        console.log('- enrollmentDate:', studentData.enrollmentDate, '¿Vacío?', !studentData.enrollmentDate);
+
+        // Debug adicional para email
+        console.log('=== DEBUG EMAIL ESPECÍFICO ===');
+        console.log('Email value:', studentData.email);
+        console.log('Email truthy check:', !!studentData.email);
+        console.log('Email length check:', studentData.email ? studentData.email.length > 0 : false);
+        console.log('Email trim check:', studentData.email ? studentData.email.trim().length > 0 : false);
+        console.log('=============================');
+
+        // Validaciones
+        if (!studentData.studentId || !studentData.cedula || !studentData.firstName || !studentData.lastName || 
+            !studentData.email || !studentData.course || !studentData.enrollmentDate) {
+            if (window.app) {
+                // Mostrar qué campos están vacíos para debugging
+                const emptyFields = [];
+                if (!studentData.studentId) emptyFields.push('ID del Estudiante');
+                if (!studentData.cedula) emptyFields.push('Cédula');
+                if (!studentData.firstName) emptyFields.push('Nombre');
+                if (!studentData.lastName) emptyFields.push('Apellidos');
+                if (!studentData.email) emptyFields.push('Email');
+                if (!studentData.course) emptyFields.push('Curso');
+                if (!studentData.enrollmentDate) emptyFields.push('Fecha de Matrícula');
+                
+                console.log('Campos vacíos detectados:', emptyFields);
+                console.log('Valor del curso seleccionado:', studentData.course);
+                console.log('Elemento del curso:', document.getElementById('studentCourse'));
+                
+                // Debug adicional para email
+                if (!studentData.email) {
+                    console.log('=== EMAIL VACÍO DEBUG ===');
+                    const emailField = document.getElementById('email');
+                    if (emailField) {
+                        console.log('Email field existe pero value está vacío');
+                        console.log('Email field value directo:', emailField.value);
+                        console.log('Email field valueAsString:', emailField.valueAsString);
+                        console.log('Email field defaultValue:', emailField.defaultValue);
+                        console.log('Email field getAttribute value:', emailField.getAttribute('value'));
+                    } else {
+                        console.log('Email field no existe en el DOM');
+                    }
+                    console.log('========================');
+                }
+                
+                window.app.showNotification(`Complete todos los campos requeridos: ${emptyFields.join(', ')}`, 'error');
+            }
+            return;
+        }
+
+        // Validar cédula (debe tener entre 9 y 12 dígitos)
+        if (!/^\d{9,12}$/.test(studentData.cedula)) {
+            if (window.app) {
+                window.app.showNotification('La cédula debe tener entre 9 y 12 dígitos numéricos', 'error');
+            }
+            return;
+        }
+
+        // Validar email
+        console.log('Validando email:', studentData.email);
+        if (!this.validateEmail(studentData.email)) {
+            console.log('Email no válido según validateEmail');
+            if (window.app) {
+                window.app.showNotification('Ingrese un email válido', 'error');
+            }
+            return;
+        }
+        console.log('Email válido');
+
+        // Verificar que el ID no esté duplicado
+        const isDuplicate = Object.entries(this.students).some(([id, student]) => 
+            student.studentId.toLowerCase() === studentData.studentId.toLowerCase() && id !== studentId
+        );
+
+        if (isDuplicate) {
+            if (window.app) {
+                window.app.showNotification('El ID del estudiante ya existe', 'error');
+            }
+            return;
+        }
+
+        // Verificar que la cédula no esté duplicada
+        const isCedulaDuplicate = Object.entries(this.students).some(([id, student]) => 
+            student.cedula === studentData.cedula && id !== studentId
+        );
+
+        if (isCedulaDuplicate) {
+            if (window.app) {
+                window.app.showNotification('La cédula ya está registrada para otro estudiante', 'error');
+            }
+            return;
+        }
+
+        // Validar teléfono (debe tener 8 dígitos, permitiendo espacios o guiones)
+        if (studentData.phone) {
+            const cleanPhone = studentData.phone.replace(/[\s-]/g, '');
+            if (!/^\d{8}$/.test(cleanPhone)) {
+                if (window.app) {
+                    window.app.showNotification('El teléfono debe tener exactamente 8 dígitos (ej: 72654651, 7265 4651, 7265-4651)', 'error');
+                }
+                return;
+            }
+            // Guardar el teléfono limpio (solo números)
+            studentData.phone = cleanPhone;
+        }
+
+        console.log('Todas las validaciones pasaron, procediendo a guardar...');
+
+        try {
+            // Deshabilitar botón de envío
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            if (studentId) {
+                // Actualizar estudiante existente
+                const studentRef = ref(db, `students/${studentId}`);
+                await set(studentRef, studentData);
+            } else {
+                // Crear nuevo estudiante
+                studentData.createdAt = new Date().toISOString();
+                const studentsRef = ref(db, 'students');
+                await push(studentsRef, studentData);
+            }
+
+            if (window.app) {
+                window.app.closeModal();
+                window.app.showNotification(
+                    `Estudiante ${studentId ? 'actualizado' : 'creado'} exitosamente`, 
+                    'success'
+                );
+            }
+
+        } catch (error) {
+            console.error('Error al guardar estudiante:', error);
+            if (window.app) {
+                window.app.showNotification('Error al guardar el estudiante', 'error');
+            }
+        } finally {
+            // Rehabilitar botón
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas fa-save"></i> ${studentId ? 'Actualizar' : 'Crear'} Estudiante`;
+            }
+        }
+    }
+
+    editStudent(studentId) {
+        this.showStudentModal(studentId);
+    }
+
+    async deleteStudent(studentId) {
+        const student = this.students[studentId];
+        if (!student) return;
+
+        const confirmed = confirm(
+            `¿Está seguro de que desea eliminar al estudiante "${student.firstName} ${student.lastName}"?\n\n` +
+            'Esta acción no se puede deshacer y eliminará todos los datos relacionados.'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            // Eliminar estudiante
+            const studentRef = ref(db, `students/${studentId}`);
+            await remove(studentRef);
+
+            // TODO: También eliminar datos relacionados (pagos, asistencia)
+
+            if (window.app) {
+                window.app.showNotification('Estudiante eliminado exitosamente', 'success');
+            }
+
+        } catch (error) {
+            console.error('Error al eliminar estudiante:', error);
+            if (window.app) {
+                window.app.showNotification('Error al eliminar el estudiante', 'error');
+            }
+        }
+    }
+
+    viewStudentDetails(studentId) {
+        const student = this.students[studentId];
+        if (!student) return;
+
+        const modalContent = `
+            <div class="modal-header">
+                                    <h3>
+                        <i class="fas fa-user-graduate"></i> 
+                        Detalles del Estudiante Veterinario
+                    </h3>
+                <button class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="student-details">
+                <div class="detail-section">
+                    <h4>Información Personal</h4>
+                    <div class="detail-grid">
+                        <div><strong>ID:</strong> ${student.studentId}</div>
+                        <div><strong>Cédula:</strong> ${student.cedula || 'No especificada'}</div>
+                        <div><strong>Nombre:</strong> ${student.firstName} ${student.lastName}</div>
+                        <div><strong>Email:</strong> ${student.email}</div>
+                        <div><strong>Teléfono:</strong> ${this.formatPhone(student.phone)}</div>
+                        <div><strong>Fecha de Nacimiento:</strong> ${student.birthDate ? this.formatDate(student.birthDate) : 'No especificada'}</div>
+                        <div><strong>Dirección:</strong> ${student.address || 'No especificada'}</div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>Información Académica</h4>
+                    <div class="detail-grid">
+                        <div><strong>Curso Veterinario:</strong> ${student.course}</div>
+                        <div><strong>Estado:</strong> <span class="status-badge ${student.status}">${this.getStatusText(student.status)}</span></div>
+                        <div><strong>Fecha de Matrícula:</strong> ${this.formatDate(student.enrollmentDate)}</div>
+                        <div><strong>Fecha de Registro:</strong> ${student.createdAt ? this.formatDateTime(student.createdAt) : 'No disponible'}</div>
+                    </div>
+                </div>
+                
+                ${student.notes ? `
+                <div class="detail-section">
+                    <h4>Observaciones</h4>
+                    <p>${student.notes}</p>
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
+                    Cerrar
+                </button>
+                <button type="button" class="btn-primary" onclick="window.studentsManager.editStudent('${studentId}')">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+            </div>
+            
+            <style>
+                .student-details .detail-section {
+                    margin-bottom: 25px;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+                
+                .student-details .detail-section h4 {
+                    margin-bottom: 15px;
+                    color: #2c3e50;
+                    border-bottom: 2px solid #667eea;
+                    padding-bottom: 5px;
+                }
+                
+                .detail-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                }
+                
+                @media (max-width: 480px) {
+                    .detail-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            </style>
+        `;
+
+        if (window.app) {
+            window.app.showModal(modalContent);
+        }
+    }
+
+    getStatusText(status) {
+        const statusMap = {
+            'active': 'Activo',
+            'inactive': 'Inactivo',
+            'graduated': 'Graduado',
+            'dropped': 'Abandonó'
+        };
+        return statusMap[status] || status;
+    }
+
+    validateEmail(email) {
+        console.log('validateEmail llamado con:', email);
+        console.log('Tipo de email:', typeof email);
+        console.log('Longitud del email:', email ? email.length : 'undefined');
+        console.log('Email es null:', email === null);
+        console.log('Email es undefined:', email === undefined);
+        console.log('Email es string vacío:', email === '');
+        console.log('Email es solo espacios:', email ? email.trim() === '' : 'N/A');
+        
+        if (!email) {
+            console.log('Email está vacío o undefined');
+            return false;
+        }
+        
+        if (typeof email !== 'string') {
+            console.log('Email no es string, es:', typeof email);
+            return false;
+        }
+        
+        if (email.trim() === '') {
+            console.log('Email es solo espacios en blanco');
+            return false;
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const isValid = emailRegex.test(email);
+        console.log('Resultado de la validación regex:', isValid);
+        console.log('Regex test input:', email);
+        console.log('Regex test result:', isValid);
+        
+        return isValid;
+    }
+
+    formatDate(date) {
+        return new Intl.DateTimeFormat('es-ES').format(new Date(date));
+    }
+
+    formatDateTime(date) {
+        return new Intl.DateTimeFormat('es-ES', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        }).format(new Date(date));
+    }
+
+    formatPhone(phone) {
+        if (!phone) return 'N/A';
+        // Formatear como 7265 4651
+        return phone.replace(/(\d{4})(\d{4})/, '$1 $2');
+    }
+
+    // Obtener lista de estudiantes activos
+    getActiveStudents() {
+        return Object.entries(this.students)
+            .filter(([id, student]) => student.status === 'active')
+            .map(([id, student]) => ({
+                id,
+                name: `${student.firstName} ${student.lastName}`,
+                studentId: student.studentId,
+                course: student.course,
+                email: student.email
+            }));
+    }
+
+    // Obtener estudiante por ID
+    getStudent(studentId) {
+        return this.students[studentId] || null;
+    }
+}
+
+// Crear instancia global
+document.addEventListener('DOMContentLoaded', async () => {
+    if (document.getElementById('studentsTable')) {
+        window.studentsManager = new StudentsManager();
+        await window.studentsManager.init();
+    }
+    
+});
+
+export default StudentsManager;
