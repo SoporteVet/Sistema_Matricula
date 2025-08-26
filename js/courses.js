@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class CoursesManager {
     constructor() {
@@ -33,15 +33,10 @@ class CoursesManager {
     }
 
     setupRealTimeUpdates() {
-        const coursesRef = ref(db, 'courses');
-        onValue(coursesRef, (snapshot) => {
-            if (snapshot.exists()) {
-                this.courses = snapshot.val();
-                this.renderCoursesTable();
-            } else {
-                this.courses = {};
-                this.renderCoursesTable();
-            }
+        // Suscribirse a actualizaciones en tiempo real de cursos
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            this.courses = courses;
+            this.renderCoursesTable();
         });
     }
 
@@ -393,6 +388,13 @@ class CoursesManager {
         
         // Descargar archivo
         XLSX.writeFile(wb, `cursos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeCourses) {
+            this.unsubscribeCourses();
+        }
     }
 }
 

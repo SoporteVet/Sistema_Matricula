@@ -1,9 +1,11 @@
 import { auth } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class App {
     constructor() {
         this.currentSection = 'dashboard';
         this.initialized = false;
+        this.realtimeManager = realtimeManager;
         this.init();
     }
 
@@ -11,6 +13,13 @@ class App {
         try {
             await this.setupEventListeners();
             await this.setupNavigation();
+            
+            // Inicializar sistema de tiempo real
+            this.realtimeManager.init();
+            
+            // Configurar indicador de estado en tiempo real
+            this.setupRealtimeStatusIndicator();
+            
             console.log('Aplicación inicializada correctamente');
             this.initialized = true;
         } catch (error) {
@@ -43,6 +52,40 @@ class App {
                 this.navigateToSection(section);
             });
         });
+    }
+
+    setupRealtimeStatusIndicator() {
+        const indicator = document.getElementById('realtimeIndicator');
+        const text = document.getElementById('realtimeText');
+        
+        if (!indicator || !text) return;
+        
+        // Función para actualizar el estado
+        const updateStatus = (status, message) => {
+            indicator.className = `status-indicator ${status}`;
+            text.textContent = message;
+        };
+        
+        // Estado inicial
+        updateStatus('connecting', 'Conectando...');
+        
+        // Verificar estado cada 5 segundos
+        setInterval(() => {
+            if (this.realtimeManager.isConnected()) {
+                updateStatus('connected', 'Conectado');
+            } else {
+                updateStatus('disconnected', 'Desconectado');
+            }
+        }, 5000);
+        
+        // Verificar estado inmediatamente
+        setTimeout(() => {
+            if (this.realtimeManager.isConnected()) {
+                updateStatus('connected', 'Conectado');
+            } else {
+                updateStatus('connecting', 'Conectando...');
+            }
+        }, 1000);
     }
 
     navigateToSection(sectionName) {
@@ -100,8 +143,7 @@ class App {
                     break;
                 case 'attendance':
                     if (window.attendanceManager) {
-                        await window.attendanceManager.loadAttendance();
-                        await window.attendanceManager.loadCourseOptions();
+                        await window.attendanceManager.loadAllData();
                     }
                     break;
                 case 'reports':

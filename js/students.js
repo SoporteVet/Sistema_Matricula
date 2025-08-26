@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class StudentsManager {
     constructor() {
@@ -46,20 +46,28 @@ class StudentsManager {
             });
         }
 
+        const insuranceDateFilter = document.getElementById('insuranceDateFilter');
+        if (insuranceDateFilter) {
+            insuranceDateFilter.addEventListener('change', () => {
+                this.applyFilters();
+            });
+        }
+
         // Configurar actualización en tiempo real
         this.setupRealTimeUpdates();
     }
 
     setupRealTimeUpdates() {
-        const studentsRef = ref(db, 'students');
-        onValue(studentsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                this.students = snapshot.val();
-                this.applyFilters();
-            } else {
-                this.students = {};
-                this.renderStudentsTable();
-            }
+        // Suscribirse a actualizaciones en tiempo real de estudiantes
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.students = students;
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de cursos para las opciones
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            this.courses = courses;
+            this.updateCourseOptions();
         });
     }
 
@@ -85,26 +93,12 @@ class StudentsManager {
 
     async loadCourseOptions() {
         try {
-            console.log('Iniciando carga de cursos...');
             const coursesRef = ref(db, 'courses');
             const snapshot = await get(coursesRef);
             
             if (snapshot.exists()) {
                 this.courses = snapshot.val();
-                console.log('Cursos cargados:', this.courses);
-                console.log('Número de cursos:', Object.keys(this.courses).length);
-                
-                // Verificar el estado de los cursos
-                const activeCourses = Object.values(this.courses).filter(course => course.status === 'active');
-                console.log('Cursos activos:', activeCourses.length);
-                console.log('Detalles de cursos activos:', activeCourses);
-                
-                // Verificar cada curso individualmente
-                Object.entries(this.courses).forEach(([id, course]) => {
-                    console.log(`Curso ${id}:`, course.name, 'Status:', course.status);
-                });
             } else {
-                console.log('No se encontraron cursos en la base de datos');
                 this.courses = {};
             }
             
@@ -129,9 +123,25 @@ class StudentsManager {
         }
     }
 
+    // Método para actualizar opciones de cursos (usado por el sistema de tiempo real)
+    updateCourseOptions() {
+        this.updateCourseSelects();
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeStudents) {
+            this.unsubscribeStudents();
+        }
+        if (this.unsubscribeCourses) {
+            this.unsubscribeCourses();
+        }
+    }
+
     applyFilters() {
         const courseFilter = document.getElementById('courseFilter')?.value || '';
         const searchText = document.getElementById('studentSearch')?.value.toLowerCase() || '';
+        const insuranceDateFilter = document.getElementById('insuranceDateFilter')?.value || '';
 
         this.filteredStudents = Object.fromEntries(
             Object.entries(this.students).filter(([id, student]) => {
@@ -141,8 +151,9 @@ class StudentsManager {
                     student.lastName.toLowerCase().includes(searchText) ||
                     student.email.toLowerCase().includes(searchText) ||
                     student.studentId.toLowerCase().includes(searchText);
+                const matchesInsuranceDate = !insuranceDateFilter || student.insuranceDate === insuranceDateFilter;
                 
-                return matchesCourse && matchesSearch;
+                return matchesCourse && matchesSearch && matchesInsuranceDate;
             })
         );
 
@@ -159,7 +170,7 @@ class StudentsManager {
         if (Object.keys(studentsToShow).length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center">
+                    <td colspan="9" class="text-center">
                         <div style="padding: 40px; color: #6c757d;">
                             <i class="fas fa-user-graduate fa-3x mb-3"></i>
                             <h4>No hay estudiantes veterinarios registrados</h4>
@@ -180,6 +191,7 @@ class StudentsManager {
                     <td>${student.email}</td>
                     <td>${this.formatPhone(student.phone)}</td>
                     <td>${student.course}</td>
+                    <td>${student.insuranceDate ? this.formatDate(student.insuranceDate) : 'N/A'}</td>
                     <td>
                         <span class="status-badge ${student.status}">
                             ${this.getStatusText(student.status)}
@@ -206,7 +218,6 @@ class StudentsManager {
 
         // Verificar que los cursos estén cargados
         if (Object.keys(this.courses).length === 0) {
-            console.log('Cursos no cargados, recargando...');
             this.loadCourseOptions().then(() => {
                 // Recursivamente llamar a showStudentModal después de cargar los cursos
                 this.showStudentModal(studentId);
@@ -216,10 +227,6 @@ class StudentsManager {
 
         const activeCourses = Object.values(this.courses)
             .filter(course => course.status === 'active');
-
-        // Debug: mostrar los cursos disponibles
-        console.log('Cursos disponibles:', this.courses);
-        console.log('Cursos activos:', activeCourses);
 
         // Verificar que hay cursos disponibles
         if (activeCourses.length === 0) {
@@ -327,7 +334,6 @@ class StudentsManager {
                             value="${student?.email || ''}" 
                             required
                             placeholder="email@ejemplo.com"
-                            style="border: 2px solid #007bff; background-color: #f8f9fa;"
                         >
                     </div>
                 </div>
@@ -367,20 +373,32 @@ class StudentsManager {
                     </div>
                     
                     <div class="form-group">
+                        <label for="insuranceDate">Fecha de Inscripción del Seguro</label>
+                        <input 
+                            type="date" 
+                            id="insuranceDate" 
+                            value="${student?.insuranceDate || ''}"
+                            placeholder="Fecha de inscripción del seguro"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
                         <label for="address">Dirección</label>
                         <textarea 
                             id="address" 
                             placeholder="Dirección completa..."
                         >${student?.address || ''}</textarea>
                     </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="notes">Observaciones</label>
-                    <textarea 
-                        id="notes" 
-                        placeholder="Notas adicionales..."
-                    >${student?.notes || ''}</textarea>
+                    
+                    <div class="form-group">
+                        <label for="notes">Observaciones</label>
+                        <textarea 
+                            id="notes" 
+                            placeholder="Notas adicionales..."
+                        >${student?.notes || ''}</textarea>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -407,82 +425,15 @@ class StudentsManager {
 
         if (window.app) {
             window.app.showModal(modalContent);
-            console.log('Modal mostrado, contenido:', modalContent);
         }
 
         // Configurar evento del formulario con un pequeño delay para asegurar que el modal esté renderizado
         setTimeout(() => {
-            console.log('Timeout ejecutado, buscando formulario...');
             const studentForm = document.getElementById('studentForm');
             if (studentForm) {
-                console.log('Formulario encontrado, configurando evento submit');
-                console.log('Formulario HTML:', studentForm.outerHTML);
-                
-                // Verificar que todos los campos requeridos estén presentes
-                const requiredFields = ['studentId', 'studentCedula', 'firstName', 'lastName', 'email', 'studentCourse', 'enrollmentDate'];
-                const missingFields = requiredFields.filter(fieldId => !document.getElementById(fieldId));
-                
-                if (missingFields.length > 0) {
-                    console.error('Campos requeridos no encontrados:', missingFields);
-                } else {
-                    console.log('Todos los campos requeridos están presentes');
-                }
-                
-                // Verificar que el dropdown de cursos tenga opciones
-                const courseSelect = document.getElementById('studentCourse');
-                if (courseSelect) {
-                    const options = courseSelect.querySelectorAll('option');
-                    console.log('Opciones del dropdown de cursos:', options.length);
-                    if (options.length <= 1) { // Solo la opción por defecto
-                        console.error('El dropdown de cursos no tiene opciones válidas');
-                    }
-                }
-                
-                // Verificar el campo email específicamente
-                const emailField = document.getElementById('email');
-                if (emailField) {
-                    console.log('Campo email encontrado:', emailField);
-                    console.log('Valor del email:', emailField.value);
-                    console.log('Tipo del campo email:', emailField.type);
-                    console.log('Email field visible:', emailField.offsetParent !== null);
-                    console.log('Email field style:', emailField.style.cssText);
-                    console.log('Email field computed style:', window.getComputedStyle(emailField));
-                    
-                    // Agregar un evento de cambio para debug
-                    emailField.addEventListener('input', (e) => {
-                        console.log('Email field input event:', e.target.value);
-                    });
-                    
-                    // Agregar un evento de focus para debug
-                    emailField.addEventListener('focus', (e) => {
-                        console.log('Email field focused, value:', e.target.value);
-                    });
-                } else {
-                    console.error('Campo email NO encontrado');
-                }
-                
                 studentForm.addEventListener('submit', (e) => {
                     try {
-                        console.log('Evento submit disparado');
                         e.preventDefault();
-                        console.log('Formulario enviado, llamando a saveStudent');
-                        console.log('Evento submit capturado correctamente');
-                        
-                        // Debug: verificar todos los campos antes de enviar
-                        const formData = new FormData(studentForm);
-                        console.log('FormData entries:');
-                        for (let [key, value] of formData.entries()) {
-                            console.log(key, ':', value);
-                        }
-                        
-                        // Debug adicional: verificar email directamente del DOM
-                        const emailField = document.getElementById('email');
-                        if (emailField) {
-                            console.log('Email field en submit:', emailField);
-                            console.log('Email value en submit:', emailField.value);
-                            console.log('Email value length:', emailField.value.length);
-                        }
-                        
                         this.saveStudent(studentId);
                     } catch (error) {
                         console.error('Error en el evento submit del formulario:', error);
@@ -491,8 +442,6 @@ class StudentsManager {
                         }
                     }
                 });
-            } else {
-                console.error('No se pudo encontrar el formulario studentForm');
             }
         }, 100);
     }
@@ -504,43 +453,33 @@ class StudentsManager {
         // Debug: verificar que el formulario existe
         console.log('Formulario encontrado:', form);
 
-        // Debug: verificar email field ANTES de capturar datos
-        const emailFieldBefore = document.getElementById('email');
-        console.log('=== EMAIL FIELD DEBUG ANTES ===');
-        if (emailFieldBefore) {
-            console.log('Email field encontrado antes de capturar datos');
-            console.log('Email field value antes:', emailFieldBefore.value);
-            console.log('Email field type antes:', emailFieldBefore.type);
-            console.log('Email field required antes:', emailFieldBefore.required);
-            console.log('Email field visible antes:', emailFieldBefore.offsetParent !== null);
-        } else {
-            console.error('Email field NO encontrado antes de capturar datos');
-        }
-        console.log('================================');
-
+        // Capturar el email usando FormData (que SÍ funciona)
+        const formData = new FormData(form);
+        const emailValue = formData.get('email') || '';
+        
+        console.log('=== FORMDATA DEBUG ===');
+        console.log('Email desde FormData:', formData.get('email'));
+        console.log('Email value final:', emailValue);
+        console.log('========================');
+        
         const studentData = {
             studentId: document.getElementById('studentId').value.trim(),
             cedula: document.getElementById('studentCedula').value.trim(),
             firstName: document.getElementById('firstName').value.trim(),
             lastName: document.getElementById('lastName').value.trim(),
-            email: document.getElementById('email').value.trim(),
+            email: emailValue,
             phone: document.getElementById('phone').value.trim(),
             course: document.getElementById('studentCourse').value,
             birthDate: document.getElementById('birthDate').value,
             enrollmentDate: document.getElementById('enrollmentDate').value,
+            insuranceDate: document.getElementById('insuranceDate').value,
             address: document.getElementById('address').value.trim(),
             notes: document.getElementById('notes').value.trim(),
             status: document.getElementById('studentStatus').value,
             updatedAt: new Date().toISOString()
         };
 
-        // Debug: mostrar los valores capturados
-        console.log('Datos del estudiante capturados:', studentData);
-        console.log('Email capturado específicamente:', studentData.email);
-        console.log('Email capturado tipo:', typeof studentData.email);
-        console.log('Email capturado longitud:', studentData.email ? studentData.email.length : 'undefined');
-        
-        // Debug: verificar que todos los elementos del formulario existen
+        // Verificar que todos los elementos del formulario existen
         const formElements = {
             studentId: document.getElementById('studentId'),
             studentCedula: document.getElementById('studentCedula'),
@@ -551,12 +490,11 @@ class StudentsManager {
             studentCourse: document.getElementById('studentCourse'),
             birthDate: document.getElementById('birthDate'),
             enrollmentDate: document.getElementById('enrollmentDate'),
+            insuranceDate: document.getElementById('insuranceDate'),
             address: document.getElementById('address'),
             notes: document.getElementById('notes'),
             studentStatus: document.getElementById('studentStatus')
         };
-        
-        console.log('Elementos del formulario encontrados:', formElements);
         
         // Verificar si algún elemento no se encontró
         const missingElements = Object.entries(formElements)
@@ -570,24 +508,6 @@ class StudentsManager {
             }
             return;
         }
-
-        // Debug: verificar cada campo requerido individualmente
-        console.log('Verificación individual de campos requeridos:');
-        console.log('- studentId:', studentData.studentId, '¿Vacío?', !studentData.studentId);
-        console.log('- cedula:', studentData.cedula, '¿Vacío?', !studentData.cedula);
-        console.log('- firstName:', studentData.firstName, '¿Vacío?', !studentData.firstName);
-        console.log('- lastName:', studentData.lastName, '¿Vacío?', !studentData.lastName);
-        console.log('- email:', studentData.email, '¿Vacío?', !studentData.email);
-        console.log('- course:', studentData.course, '¿Vacío?', !studentData.course);
-        console.log('- enrollmentDate:', studentData.enrollmentDate, '¿Vacío?', !studentData.enrollmentDate);
-
-        // Debug adicional para email
-        console.log('=== DEBUG EMAIL ESPECÍFICO ===');
-        console.log('Email value:', studentData.email);
-        console.log('Email truthy check:', !!studentData.email);
-        console.log('Email length check:', studentData.email ? studentData.email.length > 0 : false);
-        console.log('Email trim check:', studentData.email ? studentData.email.trim().length > 0 : false);
-        console.log('=============================');
 
         // Validaciones
         if (!studentData.studentId || !studentData.cedula || !studentData.firstName || !studentData.lastName || 
@@ -637,15 +557,12 @@ class StudentsManager {
         }
 
         // Validar email
-        console.log('Validando email:', studentData.email);
         if (!this.validateEmail(studentData.email)) {
-            console.log('Email no válido según validateEmail');
             if (window.app) {
                 window.app.showNotification('Ingrese un email válido', 'error');
             }
             return;
         }
-        console.log('Email válido');
 
         // Verificar que el ID no esté duplicado
         const isDuplicate = Object.entries(this.students).some(([id, student]) => 
@@ -794,6 +711,7 @@ class StudentsManager {
                         <div><strong>Curso Veterinario:</strong> ${student.course}</div>
                         <div><strong>Estado:</strong> <span class="status-badge ${student.status}">${this.getStatusText(student.status)}</span></div>
                         <div><strong>Fecha de Matrícula:</strong> ${this.formatDate(student.enrollmentDate)}</div>
+                        <div><strong>Fecha de Inscripción del Seguro:</strong> ${student.insuranceDate ? this.formatDate(student.insuranceDate) : 'No especificada'}</div>
                         <div><strong>Fecha de Registro:</strong> ${student.createdAt ? this.formatDateTime(student.createdAt) : 'No disponible'}</div>
                     </div>
                 </div>
@@ -860,36 +778,20 @@ class StudentsManager {
     }
 
     validateEmail(email) {
-        console.log('validateEmail llamado con:', email);
-        console.log('Tipo de email:', typeof email);
-        console.log('Longitud del email:', email ? email.length : 'undefined');
-        console.log('Email es null:', email === null);
-        console.log('Email es undefined:', email === undefined);
-        console.log('Email es string vacío:', email === '');
-        console.log('Email es solo espacios:', email ? email.trim() === '' : 'N/A');
-        
         if (!email) {
-            console.log('Email está vacío o undefined');
             return false;
         }
         
         if (typeof email !== 'string') {
-            console.log('Email no es string, es:', typeof email);
             return false;
         }
         
         if (email.trim() === '') {
-            console.log('Email es solo espacios en blanco');
             return false;
         }
         
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const isValid = emailRegex.test(email);
-        console.log('Resultado de la validación regex:', isValid);
-        console.log('Regex test input:', email);
-        console.log('Regex test result:', isValid);
-        
-        return isValid;
+        return emailRegex.test(email);
     }
 
     formatDate(date) {
@@ -929,6 +831,12 @@ class StudentsManager {
     getStudent(studentId) {
         return this.students[studentId] || null;
     }
+
+
+
+
+
+
 }
 
 // Crear instancia global

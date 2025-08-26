@@ -179,13 +179,16 @@ class AcademicHistoryManager {
                         </td>
                         <td>${studentStats.attendancePercentage}%</td>
                         <td>
-                            <button class="btn-info" onclick="window.academicHistoryManager.viewDetailedHistory('${studentId}')">
+                            <button class="btn-info" onclick="window.academicHistoryManager.viewDetailedHistory('${studentId}')" title="Ver historial detallado">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <button class="btn-success" onclick="window.academicHistoryManager.manageGrades('${studentId}')">
+                            <button class="btn-success" onclick="window.academicHistoryManager.manageGrades('${studentId}')" title="Gestionar notas">
                                 <i class="fas fa-star"></i>
                             </button>
-                            <button class="btn-warning" onclick="window.academicHistoryManager.generateReport('${studentId}')">
+                            <button class="btn-secondary" onclick="window.academicHistoryManager.viewStudentProfile('${studentId}')" title="Perfil completo">
+                                <i class="fas fa-user-graduate"></i>
+                            </button>
+                            <button class="btn-warning" onclick="window.academicHistoryManager.generateReport('${studentId}')" title="Generar reporte">
                                 <i class="fas fa-file-pdf"></i>
                             </button>
                         </td>
@@ -718,6 +721,145 @@ class AcademicHistoryManager {
         if (window.app) {
             window.app.showNotification('Función de reporte detallado en desarrollo', 'info');
         }
+    }
+
+    viewStudentProfile(studentId) {
+        const student = this.students[studentId];
+        if (!student) {
+            if (window.app) {
+                window.app.showNotification('Estudiante no encontrado', 'error');
+            }
+            return;
+        }
+
+        const stats = this.calculateStudentStats(studentId);
+        const studentGrades = Object.values(this.grades).filter(grade => grade.studentId === studentId);
+        const studentPayments = Object.values(this.payments).filter(payment => payment.studentId === studentId);
+        const studentAttendance = Object.values(this.attendance).filter(attendance => attendance.studentId === studentId);
+
+        // Obtener información del grupo
+        const studentGroup = Object.values(this.groups).find(group => 
+            group.students && group.students.includes(studentId)
+        );
+
+        const initials = `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+
+        const modalContent = `
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-user-graduate"></i> 
+                    Perfil Completo del Estudiante
+                </h3>
+                <button class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="student-profile-section">
+                <div class="student-profile-header">
+                    <div class="student-profile-avatar">${initials}</div>
+                    <div class="student-profile-info">
+                        <h3>${student.firstName} ${student.lastName}</h3>
+                        <p><strong>ID:</strong> ${student.studentId}</p>
+                        <p><strong>Email:</strong> ${student.email}</p>
+                        <p><strong>Teléfono:</strong> ${student.phone || 'No registrado'}</p>
+                        <p><strong>Curso:</strong> ${student.course}</p>
+                        <p><strong>Grupo:</strong> ${studentGroup ? `${studentGroup.groupName} (${studentGroup.groupCode})` : 'Sin asignar'}</p>
+                        <p><strong>Estado:</strong> <span class="status-badge ${student.status}">${this.getStatusText(student.status)}</span></p>
+                    </div>
+                </div>
+                
+                <div class="performance-metrics">
+                    <div class="performance-card">
+                        <div class="performance-value ${this.getPerformanceClass(stats.attendancePercentage, 'attendance')}">${stats.attendancePercentage}%</div>
+                        <div class="performance-label">Asistencia</div>
+                        <small>${stats.attendedClasses}/${stats.totalClasses} clases</small>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-value ${this.getGradeClass(stats.averageGrade)}">${stats.averageGrade || 'N/A'}</div>
+                        <div class="performance-label">Promedio</div>
+                        <small>${stats.totalGrades} evaluaciones</small>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-value ${stats.pendingPayments > 0 ? 'poor' : 'excellent'}">${stats.pendingPayments}</div>
+                        <div class="performance-label">Pagos Pendientes</div>
+                        <small>${stats.totalPayments} pagos totales</small>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-value excellent">${this.formatDate(student.enrollmentDate || student.createdAt)}</div>
+                        <div class="performance-label">Fecha Matrícula</div>
+                        <small>Tiempo en el instituto</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="student-profile-section">
+                <h4><i class="fas fa-calendar-check"></i> Resumen de Asistencia Reciente</h4>
+                <div style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
+                    ${studentAttendance.length === 0 ? 
+                        '<p style="color: #6c757d; text-align: center;">No hay registros de asistencia</p>' :
+                        studentAttendance
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .slice(0, 8)
+                            .map(record => `
+                                <div class="attendance-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 4px 0; background: #f8f9fa; border-radius: 6px;">
+                                    <span>${this.formatDate(record.date)}</span>
+                                    <span class="status-badge ${record.status}">
+                                        ${record.status === 'present' ? 'Presente' : record.status === 'absent' ? 'Ausente' : 'Tardanza'}
+                                    </span>
+                                </div>
+                            `).join('')
+                    }
+                </div>
+            </div>
+            
+            <div class="student-profile-section">
+                <h4><i class="fas fa-star"></i> Últimas Evaluaciones</h4>
+                <div style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
+                    ${studentGrades.length === 0 ? 
+                        '<p style="color: #6c757d; text-align: center;">No hay notas registradas</p>' :
+                        studentGrades
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .slice(0, 5)
+                            .map(grade => `
+                                <div class="grade-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 4px 0; background: #f8f9fa; border-radius: 6px;">
+                                    <div>
+                                        <strong>${grade.subject}</strong><br>
+                                        <small>${grade.type} - ${this.formatDate(grade.date)}</small>
+                                    </div>
+                                    <span class="grade-value ${this.getGradeClass(grade.grade)}">${grade.grade}</span>
+                                </div>
+                            `).join('')
+                    }
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
+                    Cerrar
+                </button>
+                <button type="button" class="btn-primary" onclick="window.academicHistoryManager.viewDetailedHistory('${studentId}')">
+                    <i class="fas fa-graduation-cap"></i> Ver Historial Completo
+                </button>
+                <button type="button" class="btn-success" onclick="window.academicHistoryManager.manageGrades('${studentId}')">
+                    <i class="fas fa-star"></i> Gestionar Notas
+                </button>
+            </div>
+        `;
+
+        if (window.app) {
+            window.app.showModal(modalContent);
+        }
+    }
+
+    getPerformanceClass(value, type) {
+        if (type === 'attendance') {
+            if (value >= 90) return 'excellent';
+            if (value >= 80) return 'good';
+            if (value >= 70) return 'average';
+            return 'poor';
+        }
+        return 'average';
     }
 
     getStatusText(status) {

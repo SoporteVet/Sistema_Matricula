@@ -1,5 +1,6 @@
-import { ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class DashboardManager {
     constructor() {
@@ -15,6 +16,7 @@ class DashboardManager {
 
     init() {
         this.setupChartJS();
+        this.setupRealTimeUpdates();
     }
 
     setupChartJS() {
@@ -24,6 +26,43 @@ class DashboardManager {
             Chart.defaults.plugins.legend.position = 'bottom';
             Chart.defaults.plugins.legend.labels.padding = 20;
         }
+    }
+
+    setupRealTimeUpdates() {
+        // Suscribirse a actualizaciones en tiempo real para estadísticas
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.stats.totalStudents = Object.keys(students).length;
+            this.updateStatsDisplay();
+        });
+        
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            const activeCourses = Object.values(courses).filter(course => 
+                course.status === 'active'
+            );
+            this.stats.totalCourses = activeCourses.length;
+            this.updateStatsDisplay();
+        });
+        
+        this.unsubscribePayments = realtimeManager.subscribe('payments', (payments) => {
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            
+            let monthlyRevenue = 0;
+            let pendingPayments = 0;
+            
+            Object.values(payments).forEach(payment => {
+                if (payment.paymentDate && payment.paymentDate.startsWith(currentMonth) && payment.status === 'paid') {
+                    monthlyRevenue += payment.amount || 0;
+                }
+                
+                if (payment.status === 'pending' || payment.status === 'overdue') {
+                    pendingPayments++;
+                }
+            });
+            
+            this.stats.monthlyRevenue = monthlyRevenue;
+            this.stats.pendingPayments = pendingPayments;
+            this.updateStatsDisplay();
+        });
     }
 
     async loadStats() {
@@ -327,30 +366,6 @@ class DashboardManager {
         }).format(amount);
     }
 
-    // Actualizar datos en tiempo real
-    setupRealTimeUpdates() {
-        // Escuchar cambios en estudiantes
-        const studentsRef = ref(db, 'students');
-        onValue(studentsRef, () => {
-            this.loadStats();
-            this.loadStudentsChart();
-        });
-
-        // Escuchar cambios en cursos
-        const coursesRef = ref(db, 'courses');
-        onValue(coursesRef, () => {
-            this.loadStats();
-            this.loadStudentsChart();
-        });
-
-        // Escuchar cambios en pagos
-        const paymentsRef = ref(db, 'payments');
-        onValue(paymentsRef, () => {
-            this.loadStats();
-            this.loadPaymentsChart();
-        });
-    }
-
     // Método para refrescar todos los datos
     async refresh() {
         try {
@@ -358,6 +373,19 @@ class DashboardManager {
             await this.loadCharts();
         } catch (error) {
             console.error('Error al refrescar dashboard:', error);
+        }
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeStudents) {
+            this.unsubscribeStudents();
+        }
+        if (this.unsubscribeCourses) {
+            this.unsubscribeCourses();
+        }
+        if (this.unsubscribePayments) {
+            this.unsubscribePayments();
         }
     }
 }

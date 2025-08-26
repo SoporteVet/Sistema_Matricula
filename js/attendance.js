@@ -13,40 +13,49 @@ class AttendanceManager {
         this.attendance = {};
         this.students = {};
         this.courses = {};
-        this.filteredAttendance = {};
+        this.groups = {};
+        this.currentStudentsForAttendance = [];
+        this.currentAttendanceData = {};
         this.init();
     }
 
     init() {
         this.setupEventListeners();
-        this.loadAttendance();
-        this.loadCourseOptions();
+        this.loadAllData();
     }
 
     setupEventListeners() {
-        // Botón para marcar asistencia
-        const markAttendanceBtn = document.getElementById('markAttendanceBtn');
-        if (markAttendanceBtn) {
-            markAttendanceBtn.addEventListener('click', () => {
-                this.showAttendanceModal();
-            });
-        }
-
-        // Filtros
+        // Filtros principales que cargan estudiantes automáticamente
         const attendanceCourseFilter = document.getElementById('attendanceCourseFilter');
         if (attendanceCourseFilter) {
             attendanceCourseFilter.addEventListener('change', () => {
-                this.applyFilters();
+                this.loadGroupsForCourse();
+                this.loadStudentsInTable();
+            });
+        }
+
+        const attendanceGroupFilter = document.getElementById('attendanceGroupFilter');
+        if (attendanceGroupFilter) {
+            attendanceGroupFilter.addEventListener('change', () => {
+                this.loadStudentsInTable();
             });
         }
 
         const attendanceDate = document.getElementById('attendanceDate');
         if (attendanceDate) {
             attendanceDate.addEventListener('change', () => {
-                this.applyFilters();
+                this.loadStudentsInTable();
             });
             // Establecer fecha actual por defecto
             attendanceDate.value = new Date().toISOString().slice(0, 10);
+        }
+
+        // Botón de guardar asistencia
+        const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
+        if (saveAttendanceBtn) {
+            saveAttendanceBtn.addEventListener('click', () => {
+                this.saveAllAttendance();
+            });
         }
 
         // Configurar actualización en tiempo real
@@ -54,56 +63,45 @@ class AttendanceManager {
     }
 
     setupRealTimeUpdates() {
-        const attendanceRef = ref(db, 'attendance');
-        onValue(attendanceRef, (snapshot) => {
-            if (snapshot.exists()) {
-                this.attendance = snapshot.val();
-                this.applyFilters();
-            } else {
-                this.attendance = {};
-                this.renderAttendanceTable();
-            }
+        const collections = ['attendance', 'students', 'courses', 'groups'];
+        
+        collections.forEach(collection => {
+            const collectionRef = ref(db, collection);
+            onValue(collectionRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    this[collection] = snapshot.val();
+                } else {
+                    this[collection] = {};
+                }
+                
+                if (collection === 'courses') {
+                    this.updateCourseFilter();
+                }
+            });
         });
     }
 
-    async loadAttendance() {
+    async loadAllData() {
         try {
-            const attendanceRef = ref(db, 'attendance');
-            const snapshot = await get(attendanceRef);
+            const collections = ['attendance', 'students', 'courses', 'groups'];
             
-            if (snapshot.exists()) {
-                this.attendance = snapshot.val();
-            } else {
-                this.attendance = {};
-            }
-            
-            this.applyFilters();
+            const promises = collections.map(async (collection) => {
+                const collectionRef = ref(db, collection);
+                const snapshot = await get(collectionRef);
+                if (snapshot.exists()) {
+                    this[collection] = snapshot.val();
+                } else {
+                    this[collection] = {};
+                }
+            });
+
+            await Promise.all(promises);
+            this.updateCourseFilter();
         } catch (error) {
-            console.error('Error al cargar asistencia:', error);
+            console.error('Error al cargar datos:', error);
             if (window.app) {
-                window.app.showNotification('Error al cargar asistencia', 'error');
+                window.app.showNotification('Error al cargar datos', 'error');
             }
-        }
-    }
-
-    async loadCourseOptions() {
-        try {
-            // Cargar estudiantes
-            const studentsRef = ref(db, 'students');
-            const studentsSnapshot = await get(studentsRef);
-            if (studentsSnapshot.exists()) {
-                this.students = studentsSnapshot.val();
-            }
-
-            // Cargar cursos
-            const coursesRef = ref(db, 'courses');
-            const coursesSnapshot = await get(coursesRef);
-            if (coursesSnapshot.exists()) {
-                this.courses = coursesSnapshot.val();
-                this.updateCourseFilter();
-            }
-        } catch (error) {
-            console.error('Error al cargar opciones:', error);
         }
     }
 
@@ -121,37 +119,158 @@ class AttendanceManager {
         }
     }
 
-    applyFilters() {
-        const courseFilter = document.getElementById('attendanceCourseFilter')?.value || '';
-        const dateFilter = document.getElementById('attendanceDate')?.value || '';
+    loadGroupsForCourse() {
+        const courseFilter = document.getElementById('attendanceCourseFilter');
+        const groupFilter = document.getElementById('attendanceGroupFilter');
+        
+        if (!courseFilter || !groupFilter) return;
 
-        this.filteredAttendance = Object.fromEntries(
-            Object.entries(this.attendance).filter(([id, record]) => {
-                const matchesCourse = !courseFilter || record.course === courseFilter;
-                const matchesDate = !dateFilter || record.date === dateFilter;
-                
-                return matchesCourse && matchesDate;
-            })
-        );
+        const selectedCourse = courseFilter.value;
+        
+        if (!selectedCourse) {
+            groupFilter.innerHTML = '<option value="">Todos los grupos</option>';
+            return;
+        }
 
-        this.renderAttendanceTable();
+        const courseGroups = Object.entries(this.groups)
+            .filter(([id, group]) => group.courseName === selectedCourse && group.status === 'active')
+            .map(([id, group]) => ({ id, ...group }));
+
+        groupFilter.innerHTML = '<option value="">Todos los grupos</option>' +
+            courseGroups.map(group => 
+                `<option value="${group.id}">${group.groupName} (${group.groupCode})</option>`
+            ).join('');
     }
 
-    renderAttendanceTable() {
+    async loadStudentsInTable() {
+        const courseFilter = document.getElementById('attendanceCourseFilter');
+        const groupFilter = document.getElementById('attendanceGroupFilter');
+        const dateFilter = document.getElementById('attendanceDate');
+        
+        // Si no hay curso seleccionado, mostrar tabla vacía
+        if (!courseFilter.value) {
+            this.renderEmptyTable();
+            return;
+        }
+
+        const selectedCourse = courseFilter.value;
+        const selectedGroup = groupFilter.value;
+        const selectedDate = dateFilter.value || new Date().toISOString().slice(0, 10);
+
+        try {
+            let studentsToShow = [];
+
+            // DEBUG: Mostrar información detallada
+            console.log('=== DEBUG ASISTENCIA ===');
+            console.log('Curso seleccionado:', selectedCourse);
+            console.log('Grupo seleccionado:', selectedGroup);
+            console.log('Total estudiantes en sistema:', Object.keys(this.students).length);
+            console.log('Todos los estudiantes:', this.students);
+
+            if (selectedGroup) {
+                // Obtener estudiantes del grupo específico
+                const group = this.groups[selectedGroup];
+                console.log('Datos del grupo:', group);
+                if (group && group.students) {
+                    studentsToShow = group.students
+                        .map(studentId => ({ id: studentId, ...this.students[studentId] }))
+                        .filter(student => student && student.course === selectedCourse && student.status === 'active');
+                    console.log('Estudiantes del grupo (antes filtro):', group.students);
+                    console.log('Estudiantes del grupo (después filtro):', studentsToShow);
+                }
+            } else {
+                // Obtener todos los estudiantes del curso
+                console.log('Buscando estudiantes del curso:', selectedCourse);
+                
+                // Analizar cada estudiante
+                Object.entries(this.students).forEach(([id, student]) => {
+                    console.log(`Estudiante ${id}:`, {
+                        nombre: `${student.firstName} ${student.lastName}`,
+                        curso: student.course,
+                        estado: student.status,
+                        coincideCurso: student.course === selectedCourse,
+                        esActivo: student.status === 'active'
+                    });
+                });
+                
+                studentsToShow = Object.entries(this.students)
+                    .filter(([id, student]) => 
+                        student.course === selectedCourse && 
+                        student.status === 'active'
+                    )
+                    .map(([id, student]) => ({ id, ...student }));
+                    
+                console.log('Estudiantes filtrados:', studentsToShow);
+            }
+            
+            console.log('Total estudiantes a mostrar:', studentsToShow.length);
+            console.log('========================');
+
+            // Verificar registros de asistencia existentes para esta fecha
+            const existingAttendance = Object.entries(this.attendance)
+                .filter(([id, record]) => 
+                    record.course === selectedCourse && 
+                    record.date === selectedDate
+                )
+                .reduce((acc, [id, record]) => {
+                    acc[record.studentId] = { ...record, id };
+                    return acc;
+                }, {});
+
+            this.currentStudentsForAttendance = studentsToShow;
+            this.currentAttendanceData = existingAttendance;
+            
+            this.renderStudentsInTable(studentsToShow, selectedCourse, selectedGroup, selectedDate, existingAttendance);
+            
+            // Mostrar botón de guardar si hay estudiantes
+            const saveBtn = document.getElementById('saveAttendanceBtn');
+            if (saveBtn) {
+                saveBtn.style.display = studentsToShow.length > 0 ? 'block' : 'none';
+            }
+
+        } catch (error) {
+            console.error('Error al cargar estudiantes:', error);
+            if (window.app) {
+                window.app.showNotification('Error al cargar estudiantes', 'error');
+            }
+        }
+    }
+
+    renderEmptyTable() {
         const tbody = document.querySelector('#attendanceTable tbody');
         if (!tbody) return;
 
-        const attendanceToShow = Object.keys(this.filteredAttendance).length > 0 ? 
-            this.filteredAttendance : this.attendance;
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center">
+                    <div style="padding: 40px; color: #6c757d;">
+                        <i class="fas fa-calendar-check fa-3x mb-3"></i>
+                        <h4>Seleccione un curso para comenzar</h4>
+                        <p>Elija un curso, grupo (opcional) y fecha para cargar los estudiantes</p>
+                    </div>
+                </td>
+            </tr>
+        `;
 
-        if (Object.keys(attendanceToShow).length === 0) {
+        // Ocultar botón de guardar
+        const saveBtn = document.getElementById('saveAttendanceBtn');
+        if (saveBtn) {
+            saveBtn.style.display = 'none';
+        }
+    }
+
+    renderStudentsInTable(students, course, groupId, date, existingAttendance) {
+        const tbody = document.querySelector('#attendanceTable tbody');
+        if (!tbody) return;
+
+        if (students.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center">
+                    <td colspan="7" class="text-center">
                         <div style="padding: 40px; color: #6c757d;">
-                            <i class="fas fa-calendar-check fa-3x mb-3"></i>
-                            <h4>No hay registros de asistencia</h4>
-                            <p>Comience marcando la asistencia de los estudiantes</p>
+                            <i class="fas fa-user-graduate fa-3x mb-3"></i>
+                            <h4>No hay estudiantes</h4>
+                            <p>No se encontraron estudiantes para los criterios seleccionados</p>
                         </div>
                     </td>
                 </tr>
@@ -159,533 +278,275 @@ class AttendanceManager {
             return;
         }
 
-        tbody.innerHTML = Object.entries(attendanceToShow)
-            .sort(([,a], [,b]) => new Date(b.date || 0) - new Date(a.date || 0))
-            .map(([id, record]) => `
-                <tr>
-                    <td>${record.studentName}</td>
-                    <td>${record.course}</td>
-                    <td>${this.formatDate(record.date)}</td>
+        const groupName = groupId ? (this.groups[groupId]?.groupName || 'Sin grupo') : 'Todos los grupos';
+
+        tbody.innerHTML = students.map(student => {
+            const existingRecord = existingAttendance[student.id];
+            const currentStatus = existingRecord ? existingRecord.status : 'present';
+            const currentNotes = existingRecord ? existingRecord.notes || '' : '';
+
+            return `
+                <tr data-student-id="${student.id}">
                     <td>
-                        <span class="status-badge ${record.status}">
-                            ${this.getStatusText(record.status)}
-                        </span>
+                        <div class="student-info">
+                            <strong>${student.firstName} ${student.lastName}</strong>
+                            <div style="font-size: 12px; color: #6c757d;">${student.studentId}</div>
+                        </div>
                     </td>
-                    <td>${record.notes || '-'}</td>
+                    <td>${course}</td>
+                    <td>${groupName}</td>
+                    <td>${this.formatDate(date)}</td>
                     <td>
-                        <button class="btn-warning" onclick="window.attendanceManager.editAttendance('${id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn-danger" onclick="window.attendanceManager.deleteAttendance('${id}')">
-                            <i class="fas fa-trash"></i>
+                        <div class="status-selector">
+                            <select class="attendance-status-select" data-student-id="${student.id}" onchange="window.attendanceManager.updateStudentStatus('${student.id}', this.value)">
+                                <option value="present" ${currentStatus === 'present' ? 'selected' : ''}>Presente</option>
+                                <option value="absent" ${currentStatus === 'absent' ? 'selected' : ''}>Ausente</option>
+                                <option value="late" ${currentStatus === 'late' ? 'selected' : ''}>Tardanza</option>
+                            </select>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="text" 
+                               class="attendance-notes-input" 
+                               data-student-id="${student.id}"
+                               placeholder="Observaciones..."
+                               value="${currentNotes}">
+                    </td>
+                    <td>
+                        <button class="btn-info btn-sm" onclick="window.attendanceManager.viewStudentProfile('${student.id}')" title="Ver perfil">
+                            <i class="fas fa-user"></i>
                         </button>
                     </td>
                 </tr>
-            `).join('');
+            `;
+        }).join('');
     }
 
-    showAttendanceModal(attendanceId = null) {
-        const record = attendanceId ? this.attendance[attendanceId] : null;
-        const isEdit = record !== null;
-
-        const modalContent = `
-            <div class="modal-header">
-                <h3>
-                    <i class="fas fa-calendar-check"></i> 
-                    ${isEdit ? 'Editar' : 'Marcar'} Asistencia
-                </h3>
-                <button class="close-modal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            ${!isEdit ? `
-            <div class="attendance-options">
-                <button type="button" class="btn-primary" onclick="window.attendanceManager.showBulkAttendance()">
-                    <i class="fas fa-users"></i> Marcar Asistencia Grupal
-                </button>
-                <button type="button" class="btn-secondary" onclick="window.attendanceManager.showIndividualAttendance()">
-                    <i class="fas fa-user"></i> Marcar Asistencia Individual
-                </button>
-            </div>
-            ` : ''}
-            
-            <form id="attendanceForm" class="handled" style="display: ${isEdit ? 'block' : 'none'};">
-                <div class="form-group">
-                    <label for="attendanceDate">Fecha *</label>
-                    <input 
-                        type="date" 
-                        id="attendanceDate" 
-                        value="${record?.date || new Date().toISOString().slice(0, 10)}" 
-                        required
-                    >
-                </div>
-                
-                <div class="form-group">
-                    <label for="attendanceCourse">Curso *</label>
-                    <select id="attendanceCourse" required>
-                        <option value="">Seleccionar curso</option>
-                        ${Object.values(this.courses)
-                            .filter(course => course.status === 'active')
-                            .map(course => `
-                                <option value="${course.name}" ${record?.course === course.name ? 'selected' : ''}>
-                                    ${course.name}
-                                </option>
-                            `).join('')}
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="attendanceStudent">Estudiante *</label>
-                    <select id="attendanceStudent" required>
-                        <option value="">Seleccionar estudiante</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="attendanceStatus">Estado *</label>
-                    <select id="attendanceStatus" required>
-                        <option value="present" ${record?.status === 'present' ? 'selected' : ''}>Presente</option>
-                        <option value="absent" ${record?.status === 'absent' ? 'selected' : ''}>Ausente</option>
-                        <option value="late" ${record?.status === 'late' ? 'selected' : ''}>Tardanza</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="attendanceNotes">Observaciones</label>
-                    <textarea 
-                        id="attendanceNotes" 
-                        placeholder="Notas adicionales..."
-                    >${record?.notes || ''}</textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn-primary">
-                        <i class="fas fa-save"></i> 
-                        ${isEdit ? 'Actualizar' : 'Marcar'} Asistencia
-                    </button>
-                </div>
-            </form>
-            
-            <style>
-                .attendance-options {
-                    display: flex;
-                    gap: 15px;
-                    margin-bottom: 25px;
-                    justify-content: center;
-                }
-                
-                .attendance-options button {
-                    flex: 1;
-                    padding: 15px;
-                    font-size: 14px;
-                }
-            </style>
-        `;
-
-        if (window.app) {
-            window.app.showModal(modalContent);
+    updateStudentStatus(studentId, status) {
+        // Actualizar datos internos
+        if (!this.currentAttendanceData[studentId]) {
+            this.currentAttendanceData[studentId] = {};
         }
+        this.currentAttendanceData[studentId].status = status;
 
-        // Configurar eventos del formulario
-        this.setupAttendanceFormEvents(attendanceId);
-    }
-
-    showBulkAttendance() {
-        const modalContent = `
-            <div class="modal-header">
-                <h3>
-                    <i class="fas fa-users"></i> 
-                    Marcar Asistencia Grupal
-                </h3>
-                <button class="close-modal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <form id="bulkAttendanceForm" class="handled">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label for="bulkDate">Fecha *</label>
-                        <input 
-                            type="date" 
-                            id="bulkDate" 
-                            value="${new Date().toISOString().slice(0, 10)}" 
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="bulkCourse">Curso *</label>
-                        <select id="bulkCourse" required>
-                            <option value="">Seleccionar curso</option>
-                            ${Object.values(this.courses)
-                                .filter(course => course.status === 'active')
-                                .map(course => `
-                                    <option value="${course.name}">${course.name}</option>
-                                `).join('')}
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="studentsListContainer" style="display: none;">
-                    <h4>Estudiantes del Curso</h4>
-                    <div id="studentsList" class="students-attendance-list">
-                        <!-- Los estudiantes se cargarán aquí -->
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn-primary">
-                        <i class="fas fa-save"></i> 
-                        Guardar Asistencia
-                    </button>
-                </div>
-            </form>
-            
-            <style>
-                .students-attendance-list {
-                    max-height: 400px;
-                    overflow-y: auto;
-                    border: 1px solid #ddd;
-                    border-radius: 8px;
-                    padding: 15px;
-                    margin-bottom: 20px;
-                }
-                
-                .student-attendance-item {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 10px;
-                    border-bottom: 1px solid #eee;
-                    margin-bottom: 10px;
-                }
-                
-                .student-attendance-item:last-child {
-                    border-bottom: none;
-                    margin-bottom: 0;
-                }
-                
-                .student-info {
-                    flex: 1;
-                }
-                
-                .attendance-controls {
-                    display: flex;
-                    gap: 10px;
-                }
-                
-                .attendance-controls input[type="radio"] {
-                    margin-right: 5px;
-                }
-                
-                .attendance-controls label {
-                    margin-right: 15px;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                }
-            </style>
-        `;
-
-        if (window.app) {
-            window.app.showModal(modalContent);
-        }
-
-        this.setupBulkAttendanceEvents();
-    }
-
-    showIndividualAttendance() {
-        // Mostrar el formulario individual
-        const form = document.getElementById('attendanceForm');
-        if (form) {
-            form.style.display = 'block';
+        // Actualizar visualmente la fila
+        const row = document.querySelector(`tr[data-student-id="${studentId}"]`);
+        if (row) {
+            // Remover clases de estado anteriores
+            row.classList.remove('status-present', 'status-absent', 'status-late');
+            // Agregar nueva clase de estado
+            row.classList.add(`status-${status}`);
         }
     }
 
-    setupBulkAttendanceEvents() {
-        const courseSelect = document.getElementById('bulkCourse');
-        const studentsListContainer = document.getElementById('studentsListContainer');
-        const studentsList = document.getElementById('studentsList');
-        const form = document.getElementById('bulkAttendanceForm');
-
-        if (courseSelect) {
-            courseSelect.addEventListener('change', () => {
-                const selectedCourse = courseSelect.value;
-                if (selectedCourse) {
-                    this.loadStudentsForCourse(selectedCourse, studentsList);
-                    studentsListContainer.style.display = 'block';
-                } else {
-                    studentsListContainer.style.display = 'none';
-                }
-            });
-        }
-
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveBulkAttendance();
-            });
-        }
-    }
-
-    loadStudentsForCourse(courseName, container) {
-        const courseStudents = Object.entries(this.students)
-            .filter(([id, student]) => student.course === courseName && student.status === 'active')
-            .map(([id, student]) => ({ id, ...student }));
-
-        container.innerHTML = courseStudents.map(student => `
-            <div class="student-attendance-item">
-                <div class="student-info">
-                    <strong>${student.firstName} ${student.lastName}</strong>
-                    <br>
-                    <small>${student.studentId}</small>
-                </div>
-                <div class="attendance-controls">
-                    <label>
-                        <input type="radio" name="attendance_${student.id}" value="present" checked>
-                        Presente
-                    </label>
-                    <label>
-                        <input type="radio" name="attendance_${student.id}" value="absent">
-                        Ausente
-                    </label>
-                    <label>
-                        <input type="radio" name="attendance_${student.id}" value="late">
-                        Tardanza
-                    </label>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    async saveBulkAttendance() {
-        const date = document.getElementById('bulkDate').value;
-        const course = document.getElementById('bulkCourse').value;
+    async saveAllAttendance() {
+        const courseFilter = document.getElementById('attendanceCourseFilter');
+        const groupFilter = document.getElementById('attendanceGroupFilter');
+        const dateFilter = document.getElementById('attendanceDate');
         
-        if (!date || !course) {
+        if (!courseFilter.value || !dateFilter.value) {
             if (window.app) {
-                window.app.showNotification('Complete todos los campos requeridos', 'error');
+                window.app.showNotification('Seleccione curso y fecha', 'error');
             }
             return;
         }
 
         try {
-            const attendanceRecords = [];
-            const studentInputs = document.querySelectorAll('[name^="attendance_"]');
+            const course = courseFilter.value;
+            const date = dateFilter.value;
+            const group = groupFilter.value;
             
-            // Agrupar por estudiante
-            const studentAttendance = {};
-            studentInputs.forEach(input => {
-                if (input.checked) {
-                    const studentId = input.name.replace('attendance_', '');
-                    studentAttendance[studentId] = input.value;
+            const attendanceRecords = [];
+            const updates = [];
+
+            // Recopilar datos de todos los estudiantes
+            this.currentStudentsForAttendance.forEach(student => {
+                const statusSelect = document.querySelector(`select[data-student-id="${student.id}"]`);
+                const notesInput = document.querySelector(`input[data-student-id="${student.id}"]`);
+                
+                if (!statusSelect) return;
+
+                const status = statusSelect.value;
+                const notes = notesInput ? notesInput.value.trim() : '';
+
+                const attendanceData = {
+                    studentId: student.id,
+                    studentName: `${student.firstName} ${student.lastName}`,
+                    course: course,
+                    date: date,
+                    status: status,
+                    notes: notes,
+                    group: group || null,
+                    updatedAt: new Date().toISOString()
+                };
+
+                // Verificar si ya existe un registro
+                const existingRecord = this.currentAttendanceData[student.id];
+                if (existingRecord && existingRecord.id) {
+                    // Actualizar registro existente
+                    updates.push({ id: existingRecord.id, data: attendanceData });
+                } else {
+                    // Crear nuevo registro
+                    attendanceData.createdAt = new Date().toISOString();
+                    attendanceRecords.push(attendanceData);
                 }
             });
 
-            // Crear registros de asistencia
-            for (const [studentId, status] of Object.entries(studentAttendance)) {
-                const student = this.students[studentId];
-                if (student) {
-                    // Verificar si ya existe registro para esta fecha y estudiante
-                    const existingRecord = Object.values(this.attendance).find(record => 
-                        record.studentId === studentId && 
-                        record.date === date &&
-                        record.course === course
-                    );
-
-                    if (!existingRecord) {
-                        attendanceRecords.push({
-                            studentId,
-                            studentName: `${student.firstName} ${student.lastName}`,
-                            course,
-                            date,
-                            status,
-                            notes: '',
-                            createdAt: new Date().toISOString()
-                        });
-                    }
-                }
-            }
-
-            // Guardar en Firebase
+            // Guardar nuevos registros
             const attendanceRef = ref(db, 'attendance');
             for (const record of attendanceRecords) {
                 await push(attendanceRef, record);
             }
 
+            // Actualizar registros existentes
+            for (const update of updates) {
+                const recordRef = ref(db, `attendance/${update.id}`);
+                await set(recordRef, update.data);
+            }
+
             if (window.app) {
-                window.app.closeModal();
                 window.app.showNotification(
-                    `Se registró la asistencia de ${attendanceRecords.length} estudiantes`, 
+                    `Asistencia guardada para ${this.currentStudentsForAttendance.length} estudiantes`, 
                     'success'
                 );
             }
 
-        } catch (error) {
-            console.error('Error al guardar asistencia masiva:', error);
-            if (window.app) {
-                window.app.showNotification('Error al guardar la asistencia', 'error');
-            }
-        }
-    }
-
-    setupAttendanceFormEvents(attendanceId) {
-        const courseSelect = document.getElementById('attendanceCourse');
-        const studentSelect = document.getElementById('attendanceStudent');
-        const form = document.getElementById('attendanceForm');
-
-        // Actualizar estudiantes cuando se selecciona curso
-        if (courseSelect) {
-            courseSelect.addEventListener('change', () => {
-                const selectedCourse = courseSelect.value;
-                this.updateStudentSelect(selectedCourse, studentSelect);
-            });
-
-            // Si hay un curso preseleccionado, cargar estudiantes
-            if (courseSelect.value) {
-                this.updateStudentSelect(courseSelect.value, studentSelect);
-            }
-        }
-
-        // Configurar envío del formulario
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveAttendance(attendanceId);
-            });
-        }
-    }
-
-    updateStudentSelect(courseName, studentSelect) {
-        if (!studentSelect) return;
-
-        const courseStudents = Object.entries(this.students)
-            .filter(([id, student]) => student.course === courseName && student.status === 'active');
-
-        studentSelect.innerHTML = '<option value="">Seleccionar estudiante</option>' +
-            courseStudents.map(([id, student]) => `
-                <option value="${id}">${student.firstName} ${student.lastName} - ${student.studentId}</option>
-            `).join('');
-    }
-
-    async saveAttendance(attendanceId = null) {
-        const form = document.getElementById('attendanceForm');
-        if (!form) return;
-
-        const studentId = document.getElementById('attendanceStudent').value;
-        const student = this.students[studentId];
-
-        const attendanceData = {
-            studentId,
-            studentName: student ? `${student.firstName} ${student.lastName}` : '',
-            course: document.getElementById('attendanceCourse').value,
-            date: document.getElementById('attendanceDate').value,
-            status: document.getElementById('attendanceStatus').value,
-            notes: document.getElementById('attendanceNotes').value.trim(),
-            updatedAt: new Date().toISOString()
-        };
-
-        // Validaciones
-        if (!attendanceData.studentId || !attendanceData.course || !attendanceData.date || !attendanceData.status) {
-            if (window.app) {
-                window.app.showNotification('Complete todos los campos requeridos', 'error');
-            }
-            return;
-        }
-
-        // Verificar registros duplicados
-        if (!attendanceId) {
-            const isDuplicate = Object.values(this.attendance).some(record => 
-                record.studentId === attendanceData.studentId && 
-                record.date === attendanceData.date &&
-                record.course === attendanceData.course
-            );
-
-            if (isDuplicate) {
-                if (window.app) {
-                    window.app.showNotification('Ya existe un registro de asistencia para este estudiante en esta fecha', 'error');
-                }
-                return;
-            }
-        }
-
-        try {
-            // Deshabilitar botón de envío
-            const submitBtn = form.querySelector('button[type="submit"]');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-
-            if (attendanceId) {
-                // Actualizar registro existente
-                const attendanceRef = ref(db, `attendance/${attendanceId}`);
-                await set(attendanceRef, attendanceData);
-            } else {
-                // Crear nuevo registro
-                attendanceData.createdAt = new Date().toISOString();
-                const attendanceRef = ref(db, 'attendance');
-                await push(attendanceRef, attendanceData);
-            }
-
-            if (window.app) {
-                window.app.closeModal();
-                window.app.showNotification(
-                    `Asistencia ${attendanceId ? 'actualizada' : 'registrada'} exitosamente`, 
-                    'success'
-                );
-            }
+            // Recargar datos para reflejar cambios
+            setTimeout(() => {
+                this.loadStudentsInTable();
+            }, 500);
 
         } catch (error) {
             console.error('Error al guardar asistencia:', error);
             if (window.app) {
                 window.app.showNotification('Error al guardar la asistencia', 'error');
             }
-        } finally {
-            // Rehabilitar botón
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = `<i class="fas fa-save"></i> ${attendanceId ? 'Actualizar' : 'Marcar'} Asistencia`;
-            }
         }
     }
 
-    editAttendance(attendanceId) {
-        this.showAttendanceModal(attendanceId);
+    viewStudentProfile(studentId) {
+        const student = this.students[studentId];
+        if (!student) {
+            if (window.app) {
+                window.app.showNotification('Estudiante no encontrado', 'error');
+            }
+            return;
+        }
+
+        // Calcular estadísticas del estudiante
+        const studentAttendance = Object.values(this.attendance).filter(record => record.studentId === studentId);
+        const totalClasses = studentAttendance.length;
+        const presentClasses = studentAttendance.filter(r => r.status === 'present' || r.status === 'late').length;
+        const attendancePercentage = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : 100;
+
+        // Obtener información adicional si está disponible
+        const payments = window.paymentsManager ? 
+            Object.values(window.paymentsManager.payments || {}).filter(p => p.studentId === studentId) : [];
+        const grades = window.academicHistoryManager ? 
+            Object.values(window.academicHistoryManager.grades || {}).filter(g => g.studentId === studentId) : [];
+
+        const pendingPayments = payments.filter(p => p.status === 'pending' || p.status === 'overdue').length;
+        const averageGrade = grades.length > 0 ? 
+            (grades.reduce((sum, grade) => sum + parseFloat(grade.grade), 0) / grades.length).toFixed(1) : 'N/A';
+
+        const initials = `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+
+        const modalContent = `
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-user-graduate"></i> 
+                    Perfil del Estudiante
+                </h3>
+                <button class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="student-profile-section">
+                <div class="student-profile-header">
+                    <div class="student-profile-avatar">${initials}</div>
+                    <div class="student-profile-info">
+                        <h3>${student.firstName} ${student.lastName}</h3>
+                        <p><strong>ID:</strong> ${student.studentId}</p>
+                        <p><strong>Email:</strong> ${student.email}</p>
+                        <p><strong>Teléfono:</strong> ${student.phone || 'No registrado'}</p>
+                        <p><strong>Curso:</strong> ${student.course}</p>
+                    </div>
+                </div>
+                
+                <div class="performance-metrics">
+                    <div class="performance-card">
+                        <div class="performance-value ${this.getPerformanceClass(attendancePercentage, 'attendance')}">${attendancePercentage}%</div>
+                        <div class="performance-label">Asistencia</div>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-value ${this.getPerformanceClass(averageGrade, 'grade')}">${averageGrade}</div>
+                        <div class="performance-label">Promedio</div>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-value ${pendingPayments > 0 ? 'poor' : 'excellent'}">${pendingPayments}</div>
+                        <div class="performance-label">Pagos Pendientes</div>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-value excellent">${totalClasses}</div>
+                        <div class="performance-label">Total Clases</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="student-profile-section">
+                <h4><i class="fas fa-calendar-check"></i> Asistencia Reciente</h4>
+                <div style="max-height: 300px; overflow-y: auto; margin-top: 15px;">
+                    ${studentAttendance.length === 0 ? 
+                        '<p style="color: #6c757d; text-align: center;">No hay registros de asistencia</p>' :
+                        studentAttendance
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .slice(0, 10)
+                            .map(record => `
+                                <div class="attendance-item">
+                                    <span class="attendance-date">${this.formatDate(record.date)}</span>
+                                    <span class="status-badge ${record.status}">
+                                        ${this.getStatusText(record.status)}
+                                    </span>
+                                    ${record.notes ? `<small>${record.notes}</small>` : ''}
+                                </div>
+                            `).join('')
+                    }
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
+                    Cerrar
+                </button>
+                ${window.academicHistoryManager ? `
+                    <button type="button" class="btn-primary" onclick="window.academicHistoryManager.viewDetailedHistory('${studentId}')">
+                        <i class="fas fa-graduation-cap"></i> Ver Historial Completo
+                    </button>
+                ` : ''}
+            </div>
+        `;
+
+        if (window.app) {
+            window.app.showModal(modalContent);
+        }
     }
 
-    async deleteAttendance(attendanceId) {
-        const record = this.attendance[attendanceId];
-        if (!record) return;
-
-        const confirmed = confirm(
-            `¿Está seguro de que desea eliminar el registro de asistencia de ${record.studentName} del ${this.formatDate(record.date)}?\n\n` +
-            'Esta acción no se puede deshacer.'
-        );
-
-        if (!confirmed) return;
-
-        try {
-            const attendanceRef = ref(db, `attendance/${attendanceId}`);
-            await remove(attendanceRef);
-
-            if (window.app) {
-                window.app.showNotification('Registro de asistencia eliminado exitosamente', 'success');
-            }
-
-        } catch (error) {
-            console.error('Error al eliminar registro de asistencia:', error);
-            if (window.app) {
-                window.app.showNotification('Error al eliminar el registro', 'error');
-            }
+    getPerformanceClass(value, type) {
+        if (type === 'attendance') {
+            if (value >= 90) return 'excellent';
+            if (value >= 80) return 'good';
+            if (value >= 70) return 'average';
+            return 'poor';
+        } else if (type === 'grade') {
+            if (value === 'N/A') return 'average';
+            const numValue = parseFloat(value);
+            if (numValue >= 90) return 'excellent';
+            if (numValue >= 80) return 'good';
+            if (numValue >= 70) return 'average';
+            return 'poor';
         }
+        return 'average';
     }
 
     getStatusText(status) {
@@ -730,4 +591,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 export default AttendanceManager;
-

@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class PaymentsManager {
     constructor() {
@@ -62,15 +62,22 @@ class PaymentsManager {
     }
 
     setupRealTimeUpdates() {
-        const paymentsRef = ref(db, 'payments');
-        onValue(paymentsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                this.payments = snapshot.val();
-                this.applyFilters();
-            } else {
-                this.payments = {};
-                this.renderPaymentsTable();
-            }
+        // Suscribirse a actualizaciones en tiempo real de pagos
+        this.unsubscribePayments = realtimeManager.subscribe('payments', (payments) => {
+            this.payments = payments;
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de estudiantes
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.students = students;
+            this.updateStudentOptions();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de cursos
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            this.courses = courses;
+            this.updateCourseOptions();
         });
     }
 
@@ -623,6 +630,31 @@ class PaymentsManager {
             if (window.app) {
                 window.app.showNotification('Error al generar los pagos', 'error');
             }
+        }
+    }
+
+    // Método para actualizar opciones de estudiantes (usado por el sistema de tiempo real)
+    updateStudentOptions() {
+        // Actualizar filtros y opciones que dependan de estudiantes
+        this.loadFilters();
+    }
+
+    // Método para actualizar opciones de cursos (usado por el sistema de tiempo real)
+    updateCourseOptions() {
+        // Actualizar filtros y opciones que dependan de cursos
+        this.loadFilters();
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribePayments) {
+            this.unsubscribePayments();
+        }
+        if (this.unsubscribeStudents) {
+            this.unsubscribeStudents();
+        }
+        if (this.unsubscribeCourses) {
+            this.unsubscribeCourses();
         }
     }
 }
