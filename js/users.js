@@ -197,7 +197,7 @@ class UsersManager {
                     <label for="userStatus">Estado</label>
                     <select id="userStatus" ${userId === auth.currentUser?.uid ? 'disabled' : ''}>
                         <option value="active" ${user?.status === 'active' ? 'selected' : ''}>Activo</option>
-                        <option value="inactive" ${user?.status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+                        <option value="inactive" ${user?.status === 'inactive' ? 'selected' : ''}>Congelado</option>
                     </select>
                     ${userId === auth.currentUser?.uid ? '<small>No puedes cambiar tu propio estado</small>' : ''}
                 </div>
@@ -518,7 +518,7 @@ class UsersManager {
         const stats = {
             total: Object.keys(this.users).length,
             active: 0,
-            inactive: 0,
+            congelado: 0,
             admins: 0,
             users: 0,
             recepcion: 0
@@ -542,7 +542,7 @@ class UsersManager {
             'Email': user.email,
             'Rol': user.role === 'admin' ? 'Administrador' : 
                    user.role === 'recepcion' ? 'Recepción' : 'Usuario',
-            'Estado': user.status === 'active' ? 'Activo' : 'Inactivo',
+            'Estado': user.status === 'active' ? 'Activo' : 'Congelado',
             'Fecha de Creación': user.createdAt ? this.formatDateTime(user.createdAt) : 'N/A',
             'Notas': user.notes || ''
         }));

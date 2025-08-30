@@ -176,7 +176,7 @@ class CoursesManager {
                     <label for="courseStatus">Estado</label>
                     <select id="courseStatus" required>
                         <option value="active" ${course?.status === 'active' ? 'selected' : ''}>Activo</option>
-                        <option value="inactive" ${course?.status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+                        <option value="inactive" ${course?.status === 'inactive' ? 'selected' : ''}>Congelado</option>
                     </select>
                 </div>
                 

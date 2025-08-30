@@ -865,7 +865,7 @@ class AcademicHistoryManager {
     getStatusText(status) {
         const statusMap = {
             'active': 'Activo',
-            'inactive': 'Inactivo',
+            'inactive': 'Congelado',
             'graduated': 'Graduado',
             'dropped': 'Abandonó'
         };

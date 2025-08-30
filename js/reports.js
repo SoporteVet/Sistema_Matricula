@@ -169,7 +169,7 @@ class ReportsManager {
                     <select id="studentsReportStatus">
                         <option value="">Todos los estados</option>
                         <option value="active">Activo</option>
-                        <option value="inactive">Inactivo</option>
+                        <option value="inactive">Congelado</option>
                         <option value="graduated">Graduado</option>
                         <option value="dropped">Abandonó</option>
                     </select>
@@ -777,7 +777,7 @@ class ReportsManager {
     getStudentStatusText(status) {
         const statusMap = {
             'active': 'Activo',
-            'inactive': 'Inactivo',
+            'inactive': 'Congelado',
             'graduated': 'Graduado',
             'dropped': 'Abandonó'
         };

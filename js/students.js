@@ -170,7 +170,7 @@ class StudentsManager {
         if (Object.keys(studentsToShow).length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9" class="text-center">
+                    <td colspan="8" class="text-center">
                         <div style="padding: 40px; color: #6c757d;">
                             <i class="fas fa-user-graduate fa-3x mb-3"></i>
                             <h4>No hay estudiantes veterinarios registrados</h4>
@@ -185,13 +185,16 @@ class StudentsManager {
         tbody.innerHTML = Object.entries(studentsToShow)
             .map(([id, student]) => `
                 <tr>
-                    <td><strong>${student.studentId}</strong></td>
+                    <td>
+                        <strong>${student.studentId}</strong>
+                        <br>
+                        <small style="color: #666;">Grupo: ${student.group || 'N/A'}</small>
+                    </td>
                     <td>${student.cedula || 'N/A'}</td>
                     <td>${student.firstName} ${student.lastName}</td>
                     <td>${student.email}</td>
                     <td>${this.formatPhone(student.phone)}</td>
-                    <td>${student.course}</td>
-                    <td>${student.insuranceDate ? this.formatDate(student.insuranceDate) : 'N/A'}</td>
+                    <td>${student.course || 'N/A'}</td>
                     <td>
                         <span class="status-badge ${student.status}">
                             ${this.getStatusText(student.status)}
@@ -270,10 +273,23 @@ class StudentsManager {
                             value="${student?.studentId || ''}" 
                             required
                             placeholder="Ej: EST001"
-                            ${isEdit ? 'readonly' : ''}
                         >
+                        ${isEdit ? '<small></small>' : ''}
                     </div>
                     
+                    <div class="form-group">
+                        <label for="studentGroup">Número de Grupo *</label>
+                        <input 
+                            type="text" 
+                            id="studentGroup" 
+                            value="${student?.group || ''}" 
+                            required
+                            placeholder="Ej: G1, G2, G3"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
                         <label for="studentCedula">Cédula *</label>
                         <input 
@@ -286,21 +302,25 @@ class StudentsManager {
                             title="La cédula debe tener entre 9 y 12 dígitos numéricos"
                         >
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="studentCourse">Nivel Académico *</label>
+                        <select id="studentCourse" required>
+                            <option value="">Seleccionar nivel académico</option>
+                            <option value="Asistente Técnico Veterinario" ${student?.course === 'Asistente Técnico Veterinario' ? 'selected' : ''}>
+                                Asistente Técnico Veterinario
+                            </option>
+                            <option value="Diplomado" ${student?.course === 'Diplomado' ? 'selected' : ''}>
+                                Diplomado
+                            </option>
+                            <option value="Curso Libre" ${student?.course === 'Curso Libre' ? 'selected' : ''}>
+                                Curso Libre
+                            </option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label for="studentCourse">Curso Veterinario *</label>
-                        <select id="studentCourse" required>
-                            <option value="">Seleccionar curso veterinario</option>
-                            ${activeCourses.map(course => `
-                                <option value="${course.name}" ${student?.course === course.name ? 'selected' : ''}>
-                                    ${course.name}
-                                </option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    
                     <div class="form-group">
                         <label for="firstName">Nombre *</label>
                         <input 
@@ -309,6 +329,16 @@ class StudentsManager {
                             value="${student?.firstName || ''}" 
                             required
                             placeholder="Nombre"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="lastName">Apellidos *</label>
+                        <input 
+                            type="text" 
+                            value="${student?.lastName || ''}" 
+                            required
+                            placeholder="Apellidos"
                         >
                     </div>
                 </div>
@@ -340,17 +370,31 @@ class StudentsManager {
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
-                        <label for="phone">Teléfono</label>
+                        <label for="phone">Teléfono Principal</label>
                         <input 
                             type="tel" 
                             id="phone" 
                             value="${student?.phone || ''}" 
-                            placeholder="1234 5678"
-                            pattern="[0-9]{8}|[0-9]{2} [0-9]{4} [0-9]{4}|[0-9]{4}-[0-9]{4}"
-                            title="El teléfono debe tener 8 dígitos (ej: 72654651, 7265 4651, 7265-4651)"
+                            placeholder="5524-2121"
+                            pattern="[0-9]{8}|[0-9]{4}-[0-9]{4}"
+                            title="El teléfono debe tener 8 dígitos"
                         >
                     </div>
                     
+                    <div class="form-group">
+                        <label for="secondaryPhone">Teléfono Secundario</label>
+                        <input 
+                            type="tel" 
+                            id="secondaryPhone" 
+                            value="${student?.secondaryPhone || ''}" 
+                            placeholder="5524-2121"
+                            pattern="[0-9]{8}|[0-9]{4}-[0-9]{4}"
+                            title="El teléfono debe tener 8 dígitos"
+                        >
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
                         <label for="birthDate">Fecha de Nacimiento</label>
                         <input 
@@ -359,9 +403,7 @@ class StudentsManager {
                             value="${student?.birthDate || ''}"
                         >
                     </div>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    
                     <div class="form-group">
                         <label for="enrollmentDate">Fecha de Matrícula</label>
                         <input 
@@ -371,7 +413,9 @@ class StudentsManager {
                             required
                         >
                     </div>
-                    
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
                         <label for="insuranceDate">Fecha de Inscripción del Seguro</label>
                         <input 
@@ -379,6 +423,16 @@ class StudentsManager {
                             id="insuranceDate" 
                             value="${student?.insuranceDate || ''}"
                             placeholder="Fecha de inscripción del seguro"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="graduationDate">Fecha de Graduación</label>
+                        <input 
+                            type="date" 
+                            id="graduationDate" 
+                            value="${student?.graduationDate || ''}"
+                            placeholder="Fecha de graduación"
                         >
                     </div>
                 </div>
@@ -405,7 +459,7 @@ class StudentsManager {
                     <label for="studentStatus">Estado</label>
                     <select id="studentStatus" required>
                         <option value="active" ${student?.status === 'active' ? 'selected' : ''}>Activo</option>
-                        <option value="inactive" ${student?.status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+                        <option value="inactive" ${student?.status === 'inactive' ? 'selected' : ''}>Congelado</option>
                         <option value="graduated" ${student?.status === 'graduated' ? 'selected' : ''}>Graduado</option>
                         <option value="dropped" ${student?.status === 'dropped' ? 'selected' : ''}>Abandonó</option>
                     </select>
@@ -464,15 +518,18 @@ class StudentsManager {
         
         const studentData = {
             studentId: document.getElementById('studentId').value.trim(),
+            group: document.getElementById('studentGroup').value.trim(),
             cedula: document.getElementById('studentCedula').value.trim(),
             firstName: document.getElementById('firstName').value.trim(),
             lastName: document.getElementById('lastName').value.trim(),
             email: emailValue,
             phone: document.getElementById('phone').value.trim(),
+            secondaryPhone: document.getElementById('secondaryPhone').value.trim(),
             course: document.getElementById('studentCourse').value,
             birthDate: document.getElementById('birthDate').value,
             enrollmentDate: document.getElementById('enrollmentDate').value,
             insuranceDate: document.getElementById('insuranceDate').value,
+            graduationDate: document.getElementById('graduationDate').value,
             address: document.getElementById('address').value.trim(),
             notes: document.getElementById('notes').value.trim(),
             status: document.getElementById('studentStatus').value,
@@ -482,15 +539,18 @@ class StudentsManager {
         // Verificar que todos los elementos del formulario existen
         const formElements = {
             studentId: document.getElementById('studentId'),
+            studentGroup: document.getElementById('studentGroup'),
             studentCedula: document.getElementById('studentCedula'),
             firstName: document.getElementById('firstName'),
             lastName: document.getElementById('lastName'),
             email: document.getElementById('email'),
             phone: document.getElementById('phone'),
+            secondaryPhone: document.getElementById('secondaryPhone'),
             studentCourse: document.getElementById('studentCourse'),
             birthDate: document.getElementById('birthDate'),
             enrollmentDate: document.getElementById('enrollmentDate'),
             insuranceDate: document.getElementById('insuranceDate'),
+            graduationDate: document.getElementById('graduationDate'),
             address: document.getElementById('address'),
             notes: document.getElementById('notes'),
             studentStatus: document.getElementById('studentStatus')
@@ -510,12 +570,13 @@ class StudentsManager {
         }
 
         // Validaciones
-        if (!studentData.studentId || !studentData.cedula || !studentData.firstName || !studentData.lastName || 
+        if (!studentData.studentId || !studentData.group || !studentData.cedula || !studentData.firstName || !studentData.lastName || 
             !studentData.email || !studentData.course || !studentData.enrollmentDate) {
             if (window.app) {
                 // Mostrar qué campos están vacíos para debugging
                 const emptyFields = [];
                 if (!studentData.studentId) emptyFields.push('ID del Estudiante');
+                if (!studentData.group) emptyFields.push('Número de Grupo');
                 if (!studentData.cedula) emptyFields.push('Cédula');
                 if (!studentData.firstName) emptyFields.push('Nombre');
                 if (!studentData.lastName) emptyFields.push('Apellidos');
@@ -588,17 +649,30 @@ class StudentsManager {
             return;
         }
 
-        // Validar teléfono (debe tener 8 dígitos, permitiendo espacios o guiones)
+        // Validar teléfono principal (debe tener 8 dígitos, permitiendo espacios o guiones)
         if (studentData.phone) {
             const cleanPhone = studentData.phone.replace(/[\s-]/g, '');
             if (!/^\d{8}$/.test(cleanPhone)) {
                 if (window.app) {
-                    window.app.showNotification('El teléfono debe tener exactamente 8 dígitos (ej: 72654651, 7265 4651, 7265-4651)', 'error');
+                    window.app.showNotification('El teléfono principal debe tener exactamente 8 dígitos (ej: 72654651, 7265-4651)', 'error');
                 }
                 return;
             }
             // Guardar el teléfono limpio (solo números)
             studentData.phone = cleanPhone;
+        }
+
+        // Validar teléfono secundario (opcional, pero si se proporciona debe tener 8 dígitos)
+        if (studentData.secondaryPhone) {
+            const cleanSecondaryPhone = studentData.secondaryPhone.replace(/[\s-]/g, '');
+            if (!/^\d{8}$/.test(cleanSecondaryPhone)) {
+                if (window.app) {
+                    window.app.showNotification('El teléfono secundario debe tener exactamente 8 dígitos (ej: 72654651, 7265-4651)', 'error');
+                }
+                return;
+            }
+            // Guardar el teléfono secundario limpio (solo números)
+            studentData.secondaryPhone = cleanSecondaryPhone;
         }
 
         console.log('Todas las validaciones pasaron, procediendo a guardar...');
@@ -696,10 +770,12 @@ class StudentsManager {
                     <h4>Información Personal</h4>
                     <div class="detail-grid">
                         <div><strong>ID:</strong> ${student.studentId}</div>
+                        <div><strong>Número de Grupo:</strong> ${student.group || 'No especificado'}</div>
                         <div><strong>Cédula:</strong> ${student.cedula || 'No especificada'}</div>
                         <div><strong>Nombre:</strong> ${student.firstName} ${student.lastName}</div>
                         <div><strong>Email:</strong> ${student.email}</div>
-                        <div><strong>Teléfono:</strong> ${this.formatPhone(student.phone)}</div>
+                        <div><strong>Teléfono Principal:</strong> ${this.formatPhone(student.phone)}</div>
+                        <div><strong>Teléfono Secundario:</strong> ${student.secondaryPhone ? this.formatPhone(student.secondaryPhone) : 'No especificado'}</div>
                         <div><strong>Fecha de Nacimiento:</strong> ${student.birthDate ? this.formatDate(student.birthDate) : 'No especificada'}</div>
                         <div><strong>Dirección:</strong> ${student.address || 'No especificada'}</div>
                     </div>
@@ -708,10 +784,11 @@ class StudentsManager {
                 <div class="detail-section">
                     <h4>Información Académica</h4>
                     <div class="detail-grid">
-                        <div><strong>Curso Veterinario:</strong> ${student.course}</div>
+                        <div><strong>Nivel Académico:</strong> ${student.course || 'No especificado'}</div>
                         <div><strong>Estado:</strong> <span class="status-badge ${student.status}">${this.getStatusText(student.status)}</span></div>
                         <div><strong>Fecha de Matrícula:</strong> ${this.formatDate(student.enrollmentDate)}</div>
                         <div><strong>Fecha de Inscripción del Seguro:</strong> ${student.insuranceDate ? this.formatDate(student.insuranceDate) : 'No especificada'}</div>
+                        <div><strong>Fecha de Graduación:</strong> ${student.graduationDate ? this.formatDate(student.graduationDate) : 'No especificada'}</div>
                         <div><strong>Fecha de Registro:</strong> ${student.createdAt ? this.formatDateTime(student.createdAt) : 'No disponible'}</div>
                     </div>
                 </div>
@@ -770,7 +847,7 @@ class StudentsManager {
     getStatusText(status) {
         const statusMap = {
             'active': 'Activo',
-            'inactive': 'Inactivo',
+            'inactive': 'Congelado',
             'graduated': 'Graduado',
             'dropped': 'Abandonó'
         };
@@ -810,8 +887,8 @@ class StudentsManager {
 
     formatPhone(phone) {
         if (!phone) return 'N/A';
-        // Formatear como 7265 4651
-        return phone.replace(/(\d{4})(\d{4})/, '$1 $2');
+        // Formatear como 7265-4651 en una sola línea
+        return phone.replace(/(\d{4})(\d{4})/, '$1-$2');
     }
 
     // Obtener lista de estudiantes activos
@@ -822,7 +899,7 @@ class StudentsManager {
                 id,
                 name: `${student.firstName} ${student.lastName}`,
                 studentId: student.studentId,
-                course: student.course,
+                level: student.course,
                 email: student.email
             }));
     }
@@ -830,6 +907,34 @@ class StudentsManager {
     // Obtener estudiante por ID
     getStudent(studentId) {
         return this.students[studentId] || null;
+    }
+
+    // Exportar lista de estudiantes
+    exportStudents() {
+        const exportData = Object.values(this.students).map(student => ({
+            'ID': student.studentId,
+            'Número de Grupo': student.group || 'N/A',
+            'Cédula': student.cedula,
+            'Nombre': `${student.firstName} ${student.lastName}`,
+            'Email': student.email,
+            'Teléfono Principal': student.phone ? this.formatPhone(student.phone) : 'N/A',
+            'Teléfono Secundario': student.secondaryPhone ? this.formatPhone(student.secondaryPhone) : 'N/A',
+            'Nivel Académico': student.course || 'N/A',
+            'Estado': this.getStatusText(student.status),
+            'Fecha de Matrícula': student.enrollmentDate ? this.formatDate(student.enrollmentDate) : 'N/A',
+            'Fecha de Seguro': student.insuranceDate ? this.formatDate(student.insuranceDate) : 'N/A',
+            'Fecha de Graduación': student.graduationDate ? this.formatDate(student.graduationDate) : 'N/A',
+            'Dirección': student.address || 'N/A',
+            'Observaciones': student.notes || 'N/A'
+        }));
+
+        // Crear archivo Excel
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes');
+        
+        // Descargar archivo
+        XLSX.writeFile(wb, `estudiantes_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
 
 

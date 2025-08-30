@@ -304,7 +304,7 @@ class GroupsManager {
                     <label for="groupStatus">Estado</label>
                     <select id="groupStatus" required>
                         <option value="active" ${group?.status === 'active' ? 'selected' : ''}>Activo</option>
-                        <option value="inactive" ${group?.status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+                        <option value="inactive" ${group?.status === 'inactive' ? 'selected' : ''}>Congelado</option>
                         <option value="completed" ${group?.status === 'completed' ? 'selected' : ''}>Completado</option>
                     </select>
                 </div>
@@ -717,7 +717,7 @@ class GroupsManager {
     getStatusText(status) {
         const statusMap = {
             'active': 'Activo',
-            'inactive': 'Inactivo',
+            'inactive': 'Congelado',
             'completed': 'Completado'
         };
         return statusMap[status] || status;
