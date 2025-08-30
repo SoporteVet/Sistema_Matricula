@@ -14,13 +14,17 @@ class PaymentsManager {
         this.students = {};
         this.courses = {};
         this.filteredPayments = {};
-        this.init();
+        // No inicializar automáticamente, esperar a que la autenticación esté lista
+        this.setupEventListeners();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.loadPayments();
-        this.loadFilters();
+    async init() {
+        try {
+            await this.loadPayments();
+            await this.loadFilters();
+        } catch (error) {
+            console.warn('Error al inicializar PaymentsManager:', error);
+        }
     }
 
     setupEventListeners() {
@@ -83,6 +87,12 @@ class PaymentsManager {
 
     async loadPayments() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para pagos');
+                return;
+            }
+
             const paymentsRef = ref(db, 'payments');
             const snapshot = await get(paymentsRef);
             
@@ -95,7 +105,8 @@ class PaymentsManager {
             this.applyFilters();
         } catch (error) {
             console.error('Error al cargar pagos:', error);
-            if (window.app) {
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar pagos', 'error');
             }
         }
@@ -103,6 +114,12 @@ class PaymentsManager {
 
     async loadFilters() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para filtros');
+                return;
+            }
+
             // Cargar estudiantes
             const studentsRef = ref(db, 'students');
             const studentsSnapshot = await get(studentsRef);
@@ -119,6 +136,10 @@ class PaymentsManager {
             }
         } catch (error) {
             console.error('Error al cargar filtros:', error);
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
+                console.warn('Error al cargar filtros de pagos:', error);
+            }
         }
     }
 
@@ -663,6 +684,7 @@ class PaymentsManager {
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('paymentsTable')) {
         window.paymentsManager = new PaymentsManager();
+        // No inicializar automáticamente, esperar a que la app esté lista
     }
 });
 

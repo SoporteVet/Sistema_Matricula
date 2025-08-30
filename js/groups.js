@@ -14,13 +14,17 @@ class GroupsManager {
         this.students = {};
         this.courses = {};
         this.filteredGroups = {};
-        this.init();
+        // No inicializar automáticamente, esperar a que la autenticación esté lista
+        this.setupEventListeners();
     }
 
     async init() {
-        this.setupEventListeners();
-        await this.loadGroups();
-        await this.loadData();
+        try {
+            await this.loadGroups();
+            await this.loadData();
+        } catch (error) {
+            console.warn('Error al inicializar GroupsManager:', error);
+        }
     }
 
     setupEventListeners() {
@@ -66,6 +70,12 @@ class GroupsManager {
 
     async loadGroups() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para grupos');
+                return;
+            }
+
             const groupsRef = ref(db, 'groups');
             const snapshot = await get(groupsRef);
             
@@ -78,7 +88,8 @@ class GroupsManager {
             this.applyFilters();
         } catch (error) {
             console.error('Error al cargar grupos:', error);
-            if (window.app) {
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar grupos', 'error');
             }
         }
@@ -86,6 +97,12 @@ class GroupsManager {
 
     async loadData() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para grupos');
+                return;
+            }
+
             // Cargar estudiantes
             const studentsRef = ref(db, 'students');
             const studentsSnapshot = await get(studentsRef);
@@ -102,6 +119,10 @@ class GroupsManager {
             }
         } catch (error) {
             console.error('Error al cargar datos:', error);
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
+                window.app.showNotification('Error al cargar datos', 'error');
+            }
         }
     }
 
@@ -768,10 +789,10 @@ class GroupsManager {
 }
 
 // Crear instancia global
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('groupsTable')) {
         window.groupsManager = new GroupsManager();
-        await window.groupsManager.init();
+        // No inicializar automáticamente, esperar a que la app esté lista
     }
 });
 

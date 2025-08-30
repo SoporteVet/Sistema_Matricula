@@ -22,9 +22,72 @@ class App {
             
             console.log('Aplicación inicializada correctamente');
             this.initialized = true;
+            
+            // Inicializar módulos después de que la app esté lista
+            this.initializeModules();
         } catch (error) {
             console.error('Error al inicializar la aplicación:', error);
         }
+    }
+
+    initializeModules() {
+        // Inicializar módulos de manera controlada
+        // Nota: Los reportes se inicializan después de la autenticación
+        console.log('Módulos básicos inicializados, esperando autenticación...');
+    }
+
+    initializeModulesAfterAuth() {
+        // Inicializar módulos después de la autenticación
+        setTimeout(() => {
+            // Inicializar reportes después de la autenticación
+            if (window.reportsManager) {
+                window.reportsManager.initializeAfterAuth().catch(error => {
+                    console.warn('Error al inicializar reportes después de auth:', error);
+                });
+            }
+            
+            // Inicializar grupos
+            if (window.groupsManager) {
+                window.groupsManager.init().catch(error => {
+                    console.warn('Error al inicializar grupos:', error);
+                });
+            }
+            
+            // Inicializar estudiantes
+            if (window.studentsManager) {
+                window.studentsManager.init().catch(error => {
+                    console.warn('Error al inicializar estudiantes:', error);
+                });
+            }
+            
+            // Inicializar cursos
+            if (window.coursesManager) {
+                window.coursesManager.init().catch(error => {
+                    console.warn('Error al inicializar cursos:', error);
+                });
+            }
+            
+            // Inicializar pagos
+            if (window.paymentsManager) {
+                window.paymentsManager.init().catch(error => {
+                    console.warn('Error al inicializar pagos:', error);
+                });
+            }
+            
+            // Inicializar asistencia
+            if (window.attendanceManager) {
+                window.attendanceManager.init().catch(error => {
+                    console.warn('Error al inicializar asistencia:', error);
+                });
+            }
+            
+            // Inicializar historial académico
+            if (window.academicHistoryManager) {
+                window.academicHistoryManager.init().catch(error => {
+                    console.warn('Error al inicializar historial académico:', error);
+                });
+            }
+        }, 1000); // Esperar 1 segundo después de la autenticación
     }
 
     setupEventListeners() {
@@ -32,6 +95,8 @@ class App {
         auth.onAuthStateChanged((user) => {
             if (user && this.initialized) {
                 this.loadDashboardData();
+                // Inicializar módulos después de la autenticación
+                this.initializeModulesAfterAuth();
             }
         });
 
@@ -147,8 +212,10 @@ class App {
                     }
                     break;
                 case 'reports':
-                    if (window.reportsManager) {
+                    if (window.reportsManager && window.auth && window.auth.currentUser) {
                         await window.reportsManager.loadReports();
+                    } else {
+                        console.warn('No se pueden cargar reportes: usuario no autenticado');
                     }
                     break;
                 case 'users':
@@ -159,7 +226,10 @@ class App {
             }
         } catch (error) {
             console.error(`Error al cargar datos de la sección ${sectionName}:`, error);
-            this.showNotification('Error al cargar los datos', 'error');
+            // Solo mostrar notificación si no es un error de permisos
+            if (error.code !== 'PERMISSION_DENIED') {
+                this.showNotification('Error al cargar los datos', 'error');
+            }
         }
     }
 

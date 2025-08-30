@@ -11,12 +11,16 @@ import { realtimeManager } from './realtime-manager.js';
 class CoursesManager {
     constructor() {
         this.courses = {};
-        this.init();
+        // No inicializar automáticamente, esperar a que la autenticación esté lista
+        this.setupEventListeners();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.loadCourses();
+    async init() {
+        try {
+            await this.loadCourses();
+        } catch (error) {
+            console.warn('Error al inicializar CoursesManager:', error);
+        }
     }
 
     setupEventListeners() {
@@ -42,6 +46,12 @@ class CoursesManager {
 
     async loadCourses() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para cursos');
+                return;
+            }
+
             const coursesRef = ref(db, 'courses');
             const snapshot = await get(coursesRef);
             
@@ -54,7 +64,8 @@ class CoursesManager {
             this.renderCoursesTable();
         } catch (error) {
             console.error('Error al cargar cursos:', error);
-            if (window.app) {
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar cursos', 'error');
             }
         }
@@ -403,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Solo crear si estamos en una página que tiene la tabla de cursos
     if (document.getElementById('coursesTable')) {
         window.coursesManager = new CoursesManager();
+        // No inicializar automáticamente, esperar a que la app esté lista
     }
 });
 

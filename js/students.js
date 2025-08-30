@@ -13,13 +13,17 @@ class StudentsManager {
         this.students = {};
         this.filteredStudents = {};
         this.courses = {};
-        this.init();
+        // No inicializar automáticamente, esperar a que la autenticación esté lista
+        this.setupEventListeners();
     }
 
     async init() {
-        this.setupEventListeners();
-        await this.loadStudents();
-        await this.loadCourseOptions();
+        try {
+            await this.loadStudents();
+            await this.loadCourseOptions();
+        } catch (error) {
+            console.warn('Error al inicializar StudentsManager:', error);
+        }
     }
 
     setupEventListeners() {
@@ -73,6 +77,12 @@ class StudentsManager {
 
     async loadStudents() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para estudiantes');
+                return;
+            }
+
             const studentsRef = ref(db, 'students');
             const snapshot = await get(studentsRef);
             
@@ -85,7 +95,8 @@ class StudentsManager {
             this.applyFilters();
         } catch (error) {
             console.error('Error al cargar estudiantes:', error);
-            if (window.app) {
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar estudiantes', 'error');
             }
         }
@@ -93,6 +104,12 @@ class StudentsManager {
 
     async loadCourseOptions() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para cursos');
+                return;
+            }
+
             const coursesRef = ref(db, 'courses');
             const snapshot = await get(coursesRef);
             
@@ -105,6 +122,10 @@ class StudentsManager {
             this.updateCourseSelects();
         } catch (error) {
             console.error('Error al cargar cursos:', error);
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
+                console.warn('Error al cargar opciones de cursos:', error);
+            }
             this.courses = {};
         }
     }
@@ -945,12 +966,11 @@ class StudentsManager {
 }
 
 // Crear instancia global
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('studentsTable')) {
         window.studentsManager = new StudentsManager();
-        await window.studentsManager.init();
+        // No inicializar automáticamente, esperar a que la app esté lista
     }
-    
 });
 
 export default StudentsManager;

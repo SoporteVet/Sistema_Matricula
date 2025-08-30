@@ -16,12 +16,16 @@ class AttendanceManager {
         this.groups = {};
         this.currentStudentsForAttendance = [];
         this.currentAttendanceData = {};
-        this.init();
+        // No inicializar automáticamente, esperar a que la autenticación esté lista
+        this.setupEventListeners();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.loadAllData();
+    async init() {
+        try {
+            await this.loadAllData();
+        } catch (error) {
+            console.warn('Error al inicializar AttendanceManager:', error);
+        }
     }
 
     setupEventListeners() {
@@ -83,6 +87,12 @@ class AttendanceManager {
 
     async loadAllData() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para asistencia');
+                return;
+            }
+
             const collections = ['attendance', 'students', 'courses', 'groups'];
             
             const promises = collections.map(async (collection) => {
@@ -99,7 +109,8 @@ class AttendanceManager {
             this.updateCourseFilter();
         } catch (error) {
             console.error('Error al cargar datos:', error);
-            if (window.app) {
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar datos', 'error');
             }
         }
@@ -587,6 +598,7 @@ class AttendanceManager {
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('attendanceTable')) {
         window.attendanceManager = new AttendanceManager();
+        // No inicializar automáticamente, esperar a que la app esté lista
     }
 });
 

@@ -9,12 +9,39 @@ class ReportsManager {
             payments: {},
             attendance: {}
         };
-        this.init();
+        this.isLoading = false;
+        // No inicializar automáticamente, esperar a que la app esté lista
+        this.setupEventListeners();
+        // No llamar a init() aquí
     }
 
     init() {
-        this.setupEventListeners();
-        this.loadReports();
+        // Solo cargar reportes si la aplicación está inicializada
+        if (window.app && window.app.initialized) {
+            this.loadReports();
+        } else {
+            // Esperar a que la aplicación se inicialice
+            setTimeout(() => {
+                if (window.app && window.app.initialized) {
+                    this.loadReports();
+                }
+            }, 2000);
+        }
+    }
+
+    // Método público para inicializar manualmente
+    initializeAfterAuth() {
+        // Verificar que la autenticación esté completa
+        if (!window.auth || !window.auth.currentUser) {
+            console.warn('ReportsManager: Usuario no autenticado, esperando...');
+            setTimeout(() => this.initializeAfterAuth(), 1000);
+            return;
+        }
+        
+        // Inicializar después de la autenticación
+        setTimeout(() => {
+            this.loadReports();
+        }, 1500);
     }
 
     setupEventListeners() {
@@ -29,7 +56,37 @@ class ReportsManager {
     }
 
     async loadReports() {
+        console.log('ReportsManager.loadReports() llamado desde:', new Error().stack);
+        
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para reportes');
+                return;
+            }
+
+            // Verificar que el usuario esté autenticado
+            if (!window.auth || !window.auth.currentUser) {
+                console.warn('ReportsManager: Usuario no autenticado, no se pueden cargar reportes');
+                return;
+            }
+
+            // Verificar que la aplicación esté inicializada
+            if (!window.app || !window.app.initialized) {
+                console.warn('ReportsManager: Aplicación no inicializada, esperando...');
+                setTimeout(() => this.loadReports(), 2000);
+                return;
+            }
+
+            // Verificación adicional: asegurar que no se ejecute múltiples veces
+            if (this.isLoading) {
+                console.log('ReportsManager: Ya se está cargando, saltando...');
+                return;
+            }
+
+            this.isLoading = true;
+            console.log('ReportsManager: Iniciando carga de datos...');
+
             // Cargar todos los datos necesarios para los reportes
             const [studentsSnapshot, coursesSnapshot, paymentsSnapshot, attendanceSnapshot] = await Promise.all([
                 get(ref(db, 'students')),
@@ -43,11 +100,16 @@ class ReportsManager {
             this.data.payments = paymentsSnapshot.exists() ? paymentsSnapshot.val() : {};
             this.data.attendance = attendanceSnapshot.exists() ? attendanceSnapshot.val() : {};
 
+            console.log('Datos de reportes cargados correctamente');
+
         } catch (error) {
             console.error('Error al cargar datos para reportes:', error);
-            if (window.app) {
+            // Solo mostrar notificación si es un error crítico y la app está inicializada
+            if (window.app && window.app.initialized && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar datos para reportes', 'error');
             }
+        } finally {
+            this.isLoading = false;
         }
     }
 

@@ -17,12 +17,16 @@ class AcademicHistoryManager {
         this.attendance = {};
         this.grades = {};
         this.filteredStudents = {};
-        this.init();
+        // No inicializar automáticamente, esperar a que la autenticación esté lista
+        this.setupEventListeners();
     }
 
     async init() {
-        this.setupEventListeners();
-        await this.loadAllData();
+        try {
+            await this.loadAllData();
+        } catch (error) {
+            console.warn('Error al inicializar AcademicHistoryManager:', error);
+        }
     }
 
     setupEventListeners() {
@@ -71,6 +75,12 @@ class AcademicHistoryManager {
 
     async loadAllData() {
         try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para historial académico');
+                return;
+            }
+
             const collections = ['students', 'courses', 'groups', 'payments', 'attendance', 'grades'];
             
             const promises = collections.map(async (collection) => {
@@ -88,7 +98,8 @@ class AcademicHistoryManager {
             this.applyFilters();
         } catch (error) {
             console.error('Error al cargar datos del historial académico:', error);
-            if (window.app) {
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
                 window.app.showNotification('Error al cargar historial académico', 'error');
             }
         }
@@ -922,10 +933,10 @@ class AcademicHistoryManager {
 }
 
 // Crear instancia global
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('academicHistoryTable')) {
         window.academicHistoryManager = new AcademicHistoryManager();
-        await window.academicHistoryManager.init();
+        // No inicializar automáticamente, esperar a que la app esté lista
     }
 });
 
