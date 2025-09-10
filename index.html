@@ -84,8 +84,15 @@
                         <li><a href="#" data-section="attendance" class="nav-link">
                             <i class="fas fa-calendar-check"></i> Asistencia
                         </a></li>
+                        <li><a href="#" data-section="cronograma" class="nav-link" >
+                            <i class="fas fa-calendar-alt"></i> Cronograma
+                            </a>
+                        </li>
                         <li><a href="#" data-section="academic-history" class="nav-link">
-                            <i class="fas fa-graduation-cap"></i> Historial Académico y Notas
+                            <i class="fas fa-graduation-cap"></i> Historial Académico
+                        </a></li>
+                        <li><a href="#" data-section="grades" class="nav-link">
+                            <i class="fas fa-clipboard-check"></i> Sistema de Notas
                         </a></li>
                         <li><a href="#" data-section="reports" class="nav-link">
                             <i class="fas fa-chart-bar"></i> Reportes
@@ -133,7 +140,7 @@
 
                         <div class="dashboard-charts">
                             <div class="chart-container">
-                                <h3>Estudiantes por Curso</h3>
+                                <h3>Estudiantes por Grupo</h3>
                                 <canvas id="studentsChart"></canvas>
                             </div>
                             <div class="chart-container">
@@ -177,8 +184,8 @@
                             </button>
                         </div>
                         <div class="filters">
-                            <select id="courseFilter">
-                                <option value="">Todos los cursos</option>
+                            <select id="groupFilter">
+                                <option value="">Todos los grupos</option>
                             </select>
                             <input type="text" id="studentSearch" placeholder="Buscar estudiante...">
                             <input type="date" id="insuranceDateFilter" placeholder="Filtrar por fecha de seguro">
@@ -205,39 +212,97 @@
                     <!-- Payments Section -->
                     <section id="payments" class="content-section">
                         <div class="section-header">
-                            <h2>Control de Pagos</h2>
-                            <button id="addPaymentBtn" class="btn-primary">
-                                <i class="fas fa-plus"></i> Registrar Pago
-                            </button>
+                            <h2>Control de Pagos y Giras</h2>
                         </div>
-                        <div class="filters">
-                            <select id="paymentCourseFilter">
-                                <option value="">Todos los cursos</option>
-                            </select>
-                            <select id="paymentStatusFilter">
-                                <option value="">Todos los estados</option>
-                                <option value="paid">Pagado</option>
-                                <option value="pending">Pendiente</option>
-                                <option value="overdue">Atrasado</option>
-                            </select>
-                            <input type="month" id="paymentMonthFilter">
+                        
+                        <!-- Tabs Navigation -->
+                        <div class="tabs-container">
+                            <div class="tabs-nav">
+                                <button class="tab-btn active" data-tab="payments-tab">
+                                    <i class="fas fa-credit-card"></i> Pagos
+                                </button>
+                                <button class="tab-btn" data-tab="giras-tab">
+                                    <i class="fas fa-route"></i> Giras
+                                </button>
+                            </div>
                         </div>
-                        <div class="table-container">
-                            <table id="paymentsTable" class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Estudiante</th>
-                                        <th>Curso</th>
-                                        <th>Mes</th>
-                                        <th>Monto</th>
-                                        <th>Estado</th>
-                                        <th>Fecha Pago</th>
-                                        <th>Método de Pago</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
+
+                        <!-- Payments Tab -->
+                        <div id="payments-tab" class="tab-content active">
+                            <div class="tab-header">
+                                <button id="addPaymentBtn" class="btn-primary">
+                                    <i class="fas fa-plus"></i> Registrar Pago
+                                </button>
+                            </div>
+                            <div class="filters">
+                                <select id="paymentGroupFilter">
+                                    <option value="">Todos los grupos</option>
+                                </select>
+                                <select id="paymentStatusFilter">
+                                    <option value="">Todos los estados</option>
+                                    <option value="paid">Pagado</option>
+                                    <option value="pending">Pendiente</option>
+                                    <option value="overdue">Atrasado</option>
+                                </select>
+                                <input type="month" id="paymentMonthFilter">
+                            </div>
+                            <div class="table-container">
+                                <table id="paymentsTable" class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Estudiante</th>
+                                            <th>Grupo</th>
+                                            <th>Mes</th>
+                                            <th>Monto</th>
+                                            <th>Estado</th>
+                                            <th>Fecha Pago</th>
+                                            <th>Método de Pago</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Giras Tab -->
+                        <div id="giras-tab" class="tab-content">
+                            <div class="tab-header">
+                                <button id="addGiraBtn" class="btn-primary">
+                                    <i class="fas fa-plus"></i> Nueva Gira
+                                </button>
+                            </div>
+                            <div class="filters">
+                                <select id="giraGroupFilter">
+                                    <option value="">Todos los grupos</option>
+                                </select>
+                                <select id="giraStatusFilter">
+                                    <option value="">Todos los estados</option>
+                                    <option value="planned">Planificada</option>
+                                    <option value="confirmed">Confirmada</option>
+                                    <option value="in-progress">En Progreso</option>
+                                    <option value="completed">Completada</option>
+                                    <option value="cancelled">Cancelada</option>
+                                </select>
+                                <input type="date" id="giraDateFilter" placeholder="Filtrar por fecha">
+                            </div>
+                            <div class="table-container">
+                                <table id="girasTable" class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nombre de la Gira</th>
+                                            <th>Grupo</th>
+                                            <th>Fecha</th>
+                                            <th>Destino</th>
+                                            <th>Participantes</th>
+                                            <th>Costo</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
                         </div>
                     </section>
 
@@ -251,15 +316,9 @@
                         <div class="attendance-filters">
                             <div class="filter-row">
                                 <div class="form-group">
-                                    <label for="attendanceCourseFilter">Curso *</label>
-                                    <select id="attendanceCourseFilter" required>
-                                        <option value="">Seleccionar curso</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="attendanceGroupFilter">Grupo</label>
-                                    <select id="attendanceGroupFilter">
-                                        <option value="">Todos los grupos</option>
+                                    <label for="attendanceGroupFilter">Grupo *</label>
+                                    <select id="attendanceGroupFilter" required>
+                                        <option value="">Seleccionar grupo</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -307,9 +366,10 @@
                             </select>
                             <select id="groupPeriodFilter">
                                 <option value="">Todos los períodos</option>
-                                <option value="semestral">Semestral</option>
-                                <option value="cuatrimestral">Cuatrimestral</option>
+                                <option value="mensual">Mensual</option>
                                 <option value="trimestral">Trimestral</option>
+                                <option value="cuatrimestral">Cuatrimestral</option>
+                                <option value="semestral">Semestral</option>
                                 <option value="anual">Anual</option>
                             </select>
                         </div>
@@ -341,8 +401,8 @@
                             <select id="historyStudentFilter">
                                 <option value="">Todos los estudiantes</option>
                             </select>
-                            <select id="historyCourseFilter">
-                                <option value="">Todos los cursos</option>
+                            <select id="historyGroupFilter">
+                                <option value="">Todos los grupos</option>
                             </select>
                             <select id="historyStatusFilter">
                                 <option value="">Todos los estados</option>
@@ -358,12 +418,43 @@
                                     <tr>
                                         <th>ID</th>
                                         <th>Estudiante</th>
-                                        <th>Curso</th>
+                                        <th>Nivel Académico</th>
                                         <th>Grupo</th>
                                         <th>Estado</th>
-                                        <th>Promedio</th>
                                         <th>Pagos</th>
                                         <th>Asistencia</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Grades Section -->
+                    <section id="grades" class="content-section">
+                        <div class="section-header">
+                            <h2>Sistema de Notas</h2>
+                            <button id="addEvaluationBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nueva Evaluación
+                            </button>
+                        </div>
+                        <div class="filters">
+                            <select id="gradesGroupFilter">
+                                <option value="">Seleccionar grupo</option>
+                            </select>
+                            <select id="evaluationFilter">
+                                <option value="">Todas las evaluaciones</option>
+                            </select>
+                        </div>
+                        <div class="table-container">
+                            <table id="gradesTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Estudiante</th>
+                                        <th>ID</th>
+                                        <th>Promedio</th>
+                                        <th>Estado</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
@@ -395,6 +486,87 @@
                                 <h3><i class="fas fa-graduation-cap"></i> Historial Académico</h3>
                                 <p>Historial completo por estudiante</p>
                                 <button class="btn-primary" data-report="academic">Generar</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Cronograma Section -->
+                    <section id="cronograma" class="content-section">
+                        <div class="section-header">
+                            <h2>Cronograma Académico</h2>
+                            <button id="addEventBtn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nuevo Evento
+                            </button>
+                        </div>
+
+                        <!-- Vista de Calendario -->
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <div class="calendar-nav">
+                                    <button id="prevMonth" class="btn-secondary">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </button>
+                                    <h3 id="currentMonth">Mes Año</h3>
+                                    <button id="nextMonth" class="btn-secondary">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                                <div class="calendar-views">
+                                    <button id="monthView" class="btn-info active">Mes</button>
+                                    <button id="weekView" class="btn-info">Semana</button>
+                                    <button id="dayView" class="btn-info">Día</button>
+                                </div>
+                            </div>
+
+                            <!-- Filtros de eventos -->
+                            <div class="event-filters">
+                                <select id="eventTypeFilter">
+                                    <option value="">Todos los tipos</option>
+                                    <option value="clase">Clases</option>
+                                    <option value="examen">Exámenes</option>
+                                    <option value="tarea">Tareas</option>
+                                    <option value="evento">Eventos</option>
+                                    <option value="feriado">Feriados</option>
+                                    <option value="reunion">Reuniones</option>
+                                </select>
+                                <select id="eventGroupFilter">
+                                    <option value="">Todos los grupos</option>
+                                </select>
+                                <input type="text" id="eventSearch" placeholder="Buscar eventos...">
+                            </div>
+
+                            <!-- Calendario -->
+                            <div id="calendar" class="calendar-grid">
+                                <!-- El calendario se generará dinámicamente -->
+                            </div>
+
+                            <!-- Vista de lista de eventos -->
+                            <div class="events-list-container">
+                                <h4>Eventos del día seleccionado</h4>
+                                <div id="eventsList" class="events-list">
+                                    <!-- Los eventos se mostrarán aquí -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lista de todos los eventos -->
+                        <div class="all-events-section">
+                            <h3>Todos los Eventos</h3>
+                            <div class="table-container">
+                                <table id="eventsTable" class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Título</th>
+                                            <th>Tipo</th>
+                                            <th>Grupo</th>
+                                            <th>Descripción</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
                             </div>
                         </div>
                     </section>
@@ -446,8 +618,58 @@
     <script type="module" src="js/attendance.js"></script>
     <script type="module" src="js/groups.js"></script>
     <script type="module" src="js/academic-history.js"></script>
+    <script type="module" src="js/grades.js"></script>
+    <script type="module" src="js/cronograma.js"></script>
     <script type="module" src="js/reports.js"></script>
     <script type="module" src="js/users.js"></script>
     <script type="module" src="js/app.js"></script>
+    
+    <!-- Script de debug simplificado -->
+    <script>
+        // Debug inmediato
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔍 DEBUG: DOM cargado');
+            
+            setTimeout(function() {
+                // Buscar el enlace del cronograma
+                const cronogramaLink = document.querySelector('a[data-section="cronograma"]');
+                console.log('🔗 Enlace cronograma:', cronogramaLink);
+                
+                if (!cronogramaLink) {
+                    console.log('❌ ENLACE NO ENCONTRADO - CREANDO UNO NUEVO');
+                    
+                    // Buscar el enlace de asistencia para insertar después
+                    const attendanceItem = document.querySelector('a[data-section="attendance"]').parentNode;
+                    
+                    if (attendanceItem) {
+                        // Crear nuevo elemento li
+                        const newLi = document.createElement('li');
+                        newLi.innerHTML = `
+                            <a href="#" data-section="cronograma" class="nav-link">
+                                <i class="fas fa-calendar-alt"></i> Cronograma
+                            </a>
+                        `;
+                        
+                        // Insertar después de asistencia
+                        attendanceItem.insertAdjacentElement('afterend', newLi);
+                        
+                        console.log('✅ CRONOGRAMA INSERTADO MANUALMENTE');
+                        
+                        // Agregar funcionalidad de click
+                        const newLink = newLi.querySelector('a');
+                        newLink.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            console.log('Click en cronograma');
+                            if (window.app && window.app.navigateToSection) {
+                                window.app.navigateToSection('cronograma');
+                            }
+                        });
+                    }
+                } else {
+                    console.log('✅ Enlace encontrado');
+                }
+            }, 200);
+        });
+    </script>
 </body>
 </html>
