@@ -1746,6 +1746,21 @@ tr[data-student-id]:hover {
     display: block;
 }
 
+/* Asegurar que el cronograma sea visible */
+li:has(a[data-section="cronograma"]),
+a[data-section="cronograma"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Forzar visibilidad del elemento li del cronograma */
+.nav-menu li:has(a[data-section="cronograma"]) {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
 /* Enhanced Responsive Design for Wide Screens */
 @media (min-width: 1400px) {
     .header-content {
@@ -1859,5 +1874,915 @@ tr[data-student-id]:hover {
     min-width: 200px;
     flex: 1;
     max-width: 300px;
+}
+
+/* Grades system styles */
+.evaluation-header {
+    text-align: center;
+    font-size: 12px;
+}
+
+.eval-type {
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 2px;
+}
+
+.eval-date {
+    color: #6c757d;
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+.eval-weight {
+    background: #667eea;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.grade-cell {
+    cursor: pointer;
+    text-align: center;
+    font-weight: bold;
+    transition: background-color 0.2s;
+}
+
+.grade-cell:hover {
+    background-color: #f8f9fa;
+}
+
+.average-cell {
+    text-align: center;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* Grade colors */
+.grade-excellent {
+    color: #28a745;
+}
+
+.grade-good {
+    color: #17a2b8;
+}
+
+.grade-average {
+    color: #ffc107;
+}
+
+.grade-poor {
+    color: #dc3545;
+}
+
+/* Evaluation form styles */
+.grade-info {
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.grade-info h4 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+}
+
+.grade-info p {
+    margin: 5px 0;
+    color: #6c757d;
+}
+
+/* Student grades form */
+.student-info {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.grades-form {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.grade-input-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin: 10px 0;
+    background: white;
+    border: 1px solid #e3e6f0;
+    border-radius: 8px;
+}
+
+.grade-info label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.grade-info small {
+    color: #6c757d;
+}
+
+.grade-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.grade-input input {
+    width: 80px;
+    text-align: center;
+}
+
+.max-score {
+    color: #6c757d;
+    font-weight: bold;
+}
+
+/* Academic details styles */
+.student-academic-details .detail-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.student-academic-details .detail-section h4 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 5px;
+}
+
+.general-average {
+    text-align: center;
+    padding: 20px;
+}
+
+.average-score {
+    display: inline-block;
+    padding: 20px 40px;
+    border-radius: 50%;
+    background: #28a745;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.average-score.excellent { background: #28a745; }
+.average-score.good { background: #17a2b8; }
+.average-score.average { background: #ffc107; color: #212529; }
+.average-score.poor { background: #dc3545; }
+
+.rubric-averages {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.rubric-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e3e6f0;
+}
+
+.evaluation-type-group {
+    margin-bottom: 20px;
+}
+
+.evaluation-type-group h5 {
+    color: #495057;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.evaluation-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin: 5px 0;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #e3e6f0;
+}
+
+.eval-grade {
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.eval-grade.excellent { background: #d4edda; color: #155724; }
+.eval-grade.good { background: #d1ecf1; color: #0c5460; }
+.eval-grade.average { background: #fff3cd; color: #856404; }
+.eval-grade.poor { background: #f8d7da; color: #721c24; }
+.eval-grade.no-grade { background: #f8f9fa; color: #6c757d; }
+
+/* ============= ESTILOS PARA CRONOGRAMA ============= */
+
+.calendar-container {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-lg);
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.calendar-nav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.calendar-nav h3 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 200px;
+    text-align: center;
+}
+
+.calendar-views {
+    display: flex;
+    gap: 8px;
+}
+
+.calendar-views button {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.calendar-views button:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.calendar-views button.active {
+    background: var(--primary-blue);
+    color: white;
+    border-color: var(--primary-blue);
+}
+
+.event-filters {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.event-filters select,
+.event-filters input {
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
+    min-width: 180px;
+}
+
+.event-filters select:focus,
+.event-filters input:focus {
+    outline: none;
+    border-color: var(--light-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Calendario Mensual */
+.calendar-month {
+    width: 100%;
+}
+
+.calendar-header-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    margin-bottom: 1px;
+}
+
+.calendar-day-header {
+    padding: 12px;
+    background: var(--primary-blue);
+    color: white;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--border-color);
+}
+
+.calendar-day {
+    min-height: 120px;
+    background: var(--bg-primary);
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.calendar-day:hover {
+    background: rgba(59, 130, 246, 0.05);
+    transform: scale(1.02);
+    z-index: 2;
+    box-shadow: var(--shadow-md);
+}
+
+.calendar-day.other-month {
+    background: var(--bg-tertiary);
+    opacity: 0.5;
+}
+
+.calendar-day.today {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(255, 255, 255, 0.9) 100%);
+    border: 2px solid var(--light-blue);
+}
+
+.calendar-day.selected {
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.1) 0%, rgba(255, 255, 255, 0.9) 100%);
+    border: 2px solid var(--primary-blue);
+}
+
+.day-number {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.calendar-day.other-month .day-number {
+    color: var(--text-light);
+}
+
+.day-events {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.event-indicator {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: white;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.event-indicator.clase {
+    background: #10b981;
+}
+
+.event-indicator.examen {
+    background: #ef4444;
+}
+
+.event-indicator.tarea {
+    background: #f59e0b;
+}
+
+.event-indicator.evento {
+    background: #3b82f6;
+}
+
+.event-indicator.feriado {
+    background: #8b5cf6;
+}
+
+.event-indicator.reunion {
+    background: #06b6d4;
+}
+
+.more-events {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+/* Vista Semanal */
+.calendar-week {
+    width: 100%;
+}
+
+.week-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    margin-bottom: 1px;
+}
+
+.week-day-header {
+    padding: 16px 12px;
+    background: var(--primary-blue);
+    color: white;
+    text-align: center;
+}
+
+.week-day-header.today {
+    background: var(--light-blue);
+}
+
+.day-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.day-number {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.week-content {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--border-color);
+}
+
+.week-day {
+    min-height: 400px;
+    background: var(--bg-primary);
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.week-event {
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.week-event:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.week-event.clase { background: #10b981; }
+.week-event.examen { background: #ef4444; }
+.week-event.tarea { background: #f59e0b; }
+.week-event.evento { background: #3b82f6; }
+.week-event.feriado { background: #8b5cf6; }
+.week-event.reunion { background: #06b6d4; }
+
+.event-time {
+    font-weight: 600;
+    font-size: 10px;
+    opacity: 0.9;
+}
+
+.event-title {
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+/* Vista Diaria */
+.calendar-day-view {
+    padding: 20px;
+}
+
+.calendar-day-view h3 {
+    margin-bottom: 20px;
+    color: var(--text-primary);
+    font-size: 24px;
+    text-align: center;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.day-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.day-event {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.day-event:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.day-event.clase { border-left-color: #10b981; }
+.day-event.examen { border-left-color: #ef4444; }
+.day-event.tarea { border-left-color: #f59e0b; }
+.day-event.evento { border-left-color: #3b82f6; }
+.day-event.feriado { border-left-color: #8b5cf6; }
+.day-event.reunion { border-left-color: #06b6d4; }
+
+.day-event .event-time {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 60px;
+}
+
+.day-event .event-info {
+    flex: 1;
+}
+
+.day-event .event-info h4 {
+    margin: 0 0 4px 0;
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+.day-event .event-info p {
+    margin: 0 0 8px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.event-group {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Lista de eventos del día */
+.events-list-container {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 2px solid var(--border-color);
+}
+
+.events-list-container h4 {
+    margin-bottom: 16px;
+    color: var(--text-primary);
+    font-size: 18px;
+}
+
+.events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.event-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.event-item:hover {
+    background: var(--bg-secondary);
+    transform: translateX(4px);
+}
+
+.event-item.clase { border-left-color: #10b981; }
+.event-item.examen { border-left-color: #ef4444; }
+.event-item.tarea { border-left-color: #f59e0b; }
+.event-item.evento { border-left-color: #3b82f6; }
+.event-item.feriado { border-left-color: #8b5cf6; }
+.event-item.reunion { border-left-color: #06b6d4; }
+
+.event-item .event-time {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 50px;
+}
+
+.event-item .event-details {
+    flex: 1;
+}
+
+.event-item .event-details h5 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.event-item .event-details p {
+    margin: 0 0 4px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.no-events {
+    text-align: center;
+    color: var(--text-light);
+    font-style: italic;
+    padding: 40px;
+}
+
+/* Sección de todos los eventos */
+.all-events-section {
+    margin-top: 40px;
+}
+
+.all-events-section h3 {
+    margin-bottom: 20px;
+    color: var(--text-primary);
+    font-size: 22px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* Modal de detalles del evento */
+.event-details-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row strong {
+    min-width: 100px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Responsive Design para Cronograma */
+@media (max-width: 1024px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+    }
+    
+    .calendar-nav {
+        justify-content: center;
+    }
+    
+    .calendar-views {
+        justify-content: center;
+    }
+    
+    .event-filters {
+        justify-content: center;
+    }
+    
+    .calendar-day {
+        min-height: 100px;
+    }
+}
+
+@media (max-width: 768px) {
+    .calendar-container {
+        padding: 16px;
+        margin: 0 -24px 24px -24px;
+        border-radius: 0;
+    }
+    
+    .calendar-header {
+        gap: 12px;
+    }
+    
+    .calendar-nav h3 {
+        font-size: 20px;
+        min-width: auto;
+    }
+    
+    .event-filters {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .event-filters select,
+    .event-filters input {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .calendar-day {
+        min-height: 80px;
+        padding: 6px;
+    }
+    
+    .day-number {
+        font-size: 14px;
+    }
+    
+    .event-indicator {
+        font-size: 10px;
+        padding: 1px 4px;
+    }
+    
+    .week-day {
+        min-height: 300px;
+        padding: 8px 4px;
+    }
+    
+    .day-event {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .day-event .event-time {
+        min-width: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .calendar-nav {
+        gap: 12px;
+    }
+    
+    .calendar-nav h3 {
+        font-size: 18px;
+    }
+    
+    .calendar-views {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .calendar-views button {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .calendar-day {
+        min-height: 60px;
+        padding: 4px;
+    }
+    
+    .day-number {
+        font-size: 12px;
+    }
+    
+    .event-indicator {
+        font-size: 9px;
+        padding: 1px 3px;
+    }
+    
+    .calendar-day-header {
+        padding: 8px 4px;
+        font-size: 12px;
+    }
+}
+
+/* ============= ESTILOS PARA TABS ============= */
+
+.tabs-container {
+    margin-bottom: 20px;
+}
+
+.tabs-nav {
+    display: flex;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 20px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: var(--bg-primary);
+    color: var(--primary-blue);
+    box-shadow: var(--shadow-sm);
+    font-weight: 600;
+}
+
+.tab-btn i {
+    font-size: 16px;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive tabs */
+@media (max-width: 768px) {
+    .tabs-nav {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .tab-btn {
+        justify-content: flex-start;
+        padding: 10px 16px;
+    }
 }
 
