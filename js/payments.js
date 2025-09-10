@@ -11,9 +11,13 @@ import { realtimeManager } from './realtime-manager.js';
 class PaymentsManager {
     constructor() {
         this.payments = {};
+        this.giras = {};
         this.students = {};
         this.courses = {};
+        this.groups = {};
         this.filteredPayments = {};
+        this.filteredGiras = {};
+        this.currentTab = 'payments-tab';
         // No inicializar automáticamente, esperar a que la autenticación esté lista
         this.setupEventListeners();
     }
@@ -21,7 +25,9 @@ class PaymentsManager {
     async init() {
         try {
             await this.loadPayments();
+            await this.loadGiras();
             await this.loadFilters();
+            this.setupTabNavigation();
         } catch (error) {
             console.warn('Error al inicializar PaymentsManager:', error);
         }
@@ -33,6 +39,14 @@ class PaymentsManager {
         if (addPaymentBtn) {
             addPaymentBtn.addEventListener('click', () => {
                 this.showPaymentModal();
+            });
+        }
+
+        // Botón para agregar nueva gira
+        const addGiraBtn = document.getElementById('addGiraBtn');
+        if (addGiraBtn) {
+            addGiraBtn.addEventListener('click', () => {
+                this.showGiraModal();
             });
         }
 
@@ -59,6 +73,28 @@ class PaymentsManager {
             // Establecer mes actual por defecto
             const currentMonth = new Date().toISOString().slice(0, 7);
             paymentMonthFilter.value = currentMonth;
+        }
+
+        // Filtros para giras
+        const giraGroupFilter = document.getElementById('giraGroupFilter');
+        if (giraGroupFilter) {
+            giraGroupFilter.addEventListener('change', () => {
+                this.applyGiraFilters();
+            });
+        }
+
+        const giraStatusFilter = document.getElementById('giraStatusFilter');
+        if (giraStatusFilter) {
+            giraStatusFilter.addEventListener('change', () => {
+                this.applyGiraFilters();
+            });
+        }
+
+        const giraDateFilter = document.getElementById('giraDateFilter');
+        if (giraDateFilter) {
+            giraDateFilter.addEventListener('change', () => {
+                this.applyGiraFilters();
+            });
         }
 
         // Configurar actualización en tiempo real
@@ -133,6 +169,14 @@ class PaymentsManager {
             if (coursesSnapshot.exists()) {
                 this.courses = coursesSnapshot.val();
                 this.updateCourseFilter();
+            }
+
+            // Cargar grupos
+            const groupsRef = ref(db, 'groups');
+            const groupsSnapshot = await get(groupsRef);
+            if (groupsSnapshot.exists()) {
+                this.groups = groupsSnapshot.val();
+                this.updateGiraGroupFilter();
             }
         } catch (error) {
             console.error('Error al cargar filtros:', error);
@@ -676,6 +720,421 @@ class PaymentsManager {
         }
         if (this.unsubscribeCourses) {
             this.unsubscribeCourses();
+        }
+    }
+
+    updateGiraGroupFilter() {
+        const giraGroupFilter = document.getElementById('giraGroupFilter');
+        
+        if (giraGroupFilter) {
+            const activeGroups = Object.entries(this.groups)
+                .filter(([id, group]) => group.status === 'active')
+                .map(([id, group]) => ({
+                    id,
+                    name: `${group.groupName} (${group.groupCode}) - ${group.courseName}`
+                }));
+            
+            giraGroupFilter.innerHTML = '<option value="">Todos los grupos</option>' +
+                activeGroups.map(group => 
+                    `<option value="${group.id}">${group.name}</option>`
+                ).join('');
+        }
+    }
+
+    // ============= MÉTODOS PARA GIRAS =============
+
+    setupTabNavigation() {
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetTab = button.dataset.tab;
+                
+                // Remover clase active de todos los botones y contenidos
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+                
+                // Agregar clase active al botón y contenido seleccionado
+                button.classList.add('active');
+                document.getElementById(targetTab).classList.add('active');
+                
+                this.currentTab = targetTab;
+                
+                // Renderizar contenido correspondiente
+                if (targetTab === 'giras-tab') {
+                    this.renderGirasTable();
+                } else if (targetTab === 'payments-tab') {
+                    this.renderPaymentsTable();
+                }
+            });
+        });
+    }
+
+    async loadGiras() {
+        try {
+            if (!db) {
+                console.warn('Base de datos no disponible para giras');
+                return;
+            }
+
+            const girasRef = ref(db, 'giras');
+            const snapshot = await get(girasRef);
+            
+            if (snapshot.exists()) {
+                this.giras = snapshot.val();
+            } else {
+                this.giras = {};
+            }
+            
+            this.applyGiraFilters();
+            
+            // Renderizar tabla inicial si estamos en el tab de giras
+            if (this.currentTab === 'giras-tab') {
+                this.renderGirasTable();
+            }
+        } catch (error) {
+            console.error('Error al cargar giras:', error);
+        }
+    }
+
+    applyGiraFilters() {
+        const groupFilter = document.getElementById('giraGroupFilter')?.value || '';
+        const statusFilter = document.getElementById('giraStatusFilter')?.value || '';
+        const dateFilter = document.getElementById('giraDateFilter')?.value || '';
+
+        this.filteredGiras = Object.entries(this.giras).filter(([id, gira]) => {
+            const matchesGroup = !groupFilter || gira.groupId === groupFilter;
+            const matchesStatus = !statusFilter || gira.status === statusFilter;
+            const matchesDate = !dateFilter || gira.date === dateFilter;
+
+            return matchesGroup && matchesStatus && matchesDate;
+        }).reduce((acc, [id, gira]) => {
+            acc[id] = gira;
+            return acc;
+        }, {});
+
+        this.renderGirasTable();
+    }
+
+    renderGirasTable() {
+        const tbody = document.querySelector('#girasTable tbody');
+        if (!tbody) return;
+
+        if (Object.keys(this.filteredGiras).length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center">
+                        <div style="padding: 40px; color: #6c757d;">
+                            <i class="fas fa-route fa-3x mb-3"></i>
+                            <h4>No hay giras registradas</h4>
+                            <p>Comience agregando una nueva gira</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = Object.entries(this.filteredGiras).map(([id, gira]) => {
+            const group = this.groups[gira.groupId];
+            const groupName = group ? `${group.groupName} (${group.groupCode})` : 'Grupo no encontrado';
+            const participantCount = gira.participants ? gira.participants.length : 0;
+            
+            return `
+                <tr>
+                    <td><strong>${gira.name}</strong></td>
+                    <td>${groupName}</td>
+                    <td>${this.formatDate(gira.date)}</td>
+                    <td>${gira.destination}</td>
+                    <td>${participantCount} estudiantes</td>
+                    <td>$${gira.cost ? gira.cost.toLocaleString() : '0'}</td>
+                    <td>
+                        <span class="status-badge ${gira.status}">
+                            ${this.getGiraStatusText(gira.status)}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn-info btn-sm" onclick="window.paymentsManager.viewGiraDetails('${id}')" title="Ver detalles">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-warning btn-sm" onclick="window.paymentsManager.showGiraModal('${id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-danger btn-sm" onclick="window.paymentsManager.deleteGira('${id}')" title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    showGiraModal(giraId = null) {
+        const gira = giraId ? this.giras[giraId] : null;
+        const isEdit = gira !== null;
+
+        const activeGroups = Object.entries(this.groups)
+            .filter(([id, group]) => group.status === 'active')
+            .map(([id, group]) => ({
+                id,
+                name: `${group.groupName} (${group.groupCode}) - ${group.courseName}`
+            }));
+
+        const modalContent = `
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-route"></i> 
+                    ${isEdit ? 'Editar' : 'Nueva'} Gira
+                </h3>
+                <button class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="giraForm" class="handled">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="giraName">Nombre de la Gira *</label>
+                        <input 
+                            type="text" 
+                            id="giraName" 
+                            value="${gira?.name || ''}" 
+                            required
+                            placeholder="Ej: Visita a Zoológico Nacional"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="giraGroup">Grupo *</label>
+                        <select id="giraGroup" required>
+                            <option value="">Seleccionar grupo</option>
+                            ${activeGroups.map(group => `
+                                <option value="${group.id}" ${gira?.groupId === group.id ? 'selected' : ''}>
+                                    ${group.name}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="giraDate">Fecha de la Gira *</label>
+                        <input 
+                            type="date" 
+                            id="giraDate" 
+                            value="${gira?.date || ''}" 
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="giraCost">Costo por Estudiante</label>
+                        <input 
+                            type="number" 
+                            id="giraCost" 
+                            value="${gira?.cost || ''}" 
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                        >
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="giraDestination">Destino *</label>
+                    <input 
+                        type="text" 
+                        id="giraDestination" 
+                        value="${gira?.destination || ''}" 
+                        required
+                        placeholder="Ej: Zoológico Nacional, San José"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="giraStatus">Estado</label>
+                    <select id="giraStatus">
+                        <option value="planned" ${gira?.status === 'planned' ? 'selected' : ''}>Planificada</option>
+                        <option value="confirmed" ${gira?.status === 'confirmed' ? 'selected' : ''}>Confirmada</option>
+                        <option value="in-progress" ${gira?.status === 'in-progress' ? 'selected' : ''}>En Progreso</option>
+                        <option value="completed" ${gira?.status === 'completed' ? 'selected' : ''}>Completada</option>
+                        <option value="cancelled" ${gira?.status === 'cancelled' ? 'selected' : ''}>Cancelada</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="giraDescription">Descripción</label>
+                    <textarea 
+                        id="giraDescription" 
+                        placeholder="Descripción de la gira, actividades, horarios, etc."
+                    >${gira?.description || ''}</textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> 
+                        ${isEdit ? 'Actualizar' : 'Crear'} Gira
+                    </button>
+                </div>
+            </form>
+        `;
+
+        if (window.app) {
+            window.app.showModal(modalContent);
+        }
+
+        // Configurar evento del formulario
+        setTimeout(() => {
+            const giraForm = document.getElementById('giraForm');
+            if (giraForm && !giraForm.hasAttribute('data-listener-attached')) {
+                giraForm.setAttribute('data-listener-attached', 'true');
+                giraForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveGira(giraId);
+                });
+            }
+        }, 100);
+    }
+
+    async saveGira(giraId = null) {
+        const form = document.getElementById('giraForm');
+        if (!form) return;
+
+        if (form.hasAttribute('data-saving')) return;
+        form.setAttribute('data-saving', 'true');
+
+        const giraData = {
+            name: document.getElementById('giraName').value.trim(),
+            groupId: document.getElementById('giraGroup').value,
+            date: document.getElementById('giraDate').value,
+            cost: parseFloat(document.getElementById('giraCost').value) || 0,
+            destination: document.getElementById('giraDestination').value.trim(),
+            status: document.getElementById('giraStatus').value,
+            description: document.getElementById('giraDescription').value.trim(),
+            updatedAt: new Date().toISOString()
+        };
+
+        if (!giraData.name || !giraData.groupId || !giraData.date || !giraData.destination) {
+            if (window.app) {
+                window.app.showNotification('Complete todos los campos requeridos', 'error');
+            }
+            form.removeAttribute('data-saving');
+            return;
+        }
+
+        try {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+            if (giraId) {
+                const giraRef = ref(db, `giras/${giraId}`);
+                await set(giraRef, giraData);
+            } else {
+                giraData.createdAt = new Date().toISOString();
+                giraData.participants = [];
+                const girasRef = ref(db, 'giras');
+                await push(girasRef, giraData);
+            }
+
+            if (window.app) {
+                window.app.closeModal();
+                window.app.showNotification(
+                    `Gira ${giraId ? 'actualizada' : 'creada'} exitosamente`, 
+                    'success'
+                );
+            }
+
+        } catch (error) {
+            console.error('Error al guardar gira:', error);
+            if (window.app) {
+                window.app.showNotification('Error al guardar la gira', 'error');
+            }
+        } finally {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas fa-save"></i> ${giraId ? 'Actualizar' : 'Crear'} Gira`;
+            }
+            form.removeAttribute('data-saving');
+        }
+    }
+
+    async deleteGira(giraId) {
+        const gira = this.giras[giraId];
+        if (!gira) return;
+
+        if (!confirm(`¿Eliminar la gira "${gira.name}"?`)) return;
+
+        try {
+            await remove(ref(db, `giras/${giraId}`));
+            if (window.app) {
+                window.app.showNotification(`Gira "${gira.name}" eliminada`, 'success');
+            }
+        } catch (error) {
+            console.error('Error al eliminar gira:', error);
+            if (window.app) {
+                window.app.showNotification('Error al eliminar la gira', 'error');
+            }
+        }
+    }
+
+    getGiraStatusText(status) {
+        const statusMap = {
+            'planned': 'Planificada',
+            'confirmed': 'Confirmada',
+            'in-progress': 'En Progreso',
+            'completed': 'Completada',
+            'cancelled': 'Cancelada'
+        };
+        return statusMap[status] || status;
+    }
+
+    formatDate(date) {
+        return new Intl.DateTimeFormat('es-ES').format(new Date(date));
+    }
+
+    viewGiraDetails(giraId) {
+        const gira = this.giras[giraId];
+        if (!gira) return;
+
+        const group = this.groups[gira.groupId];
+        const groupName = group ? `${group.groupName} (${group.groupCode})` : 'Grupo no encontrado';
+
+        const modalContent = `
+            <div class="modal-header">
+                <h3><i class="fas fa-route"></i> Detalles de la Gira</h3>
+                <button class="close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="gira-details">
+                <h4>${gira.name}</h4>
+                <div class="detail-grid">
+                    <div><strong>Grupo:</strong> ${groupName}</div>
+                    <div><strong>Fecha:</strong> ${this.formatDate(gira.date)}</div>
+                    <div><strong>Destino:</strong> ${gira.destination}</div>
+                    <div><strong>Costo:</strong> $${gira.cost ? gira.cost.toLocaleString() : '0'}</div>
+                    <div><strong>Estado:</strong> 
+                        <span class="status-badge ${gira.status}">
+                            ${this.getGiraStatusText(gira.status)}
+                        </span>
+                    </div>
+                </div>
+                ${gira.description ? `<p><strong>Descripción:</strong> ${gira.description}</p>` : ''}
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="window.app.closeModal()">Cerrar</button>
+                <button type="button" class="btn-primary" onclick="window.paymentsManager.showGiraModal('${giraId}')">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+            </div>
+        `;
+
+        if (window.app) {
+            window.app.showModal(modalContent);
         }
     }
 }

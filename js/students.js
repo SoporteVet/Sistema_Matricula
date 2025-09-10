@@ -13,6 +13,7 @@ class StudentsManager {
         this.students = {};
         this.filteredStudents = {};
         this.courses = {};
+        this.groups = {};
         // No inicializar automáticamente, esperar a que la autenticación esté lista
         this.setupEventListeners();
     }
@@ -21,6 +22,7 @@ class StudentsManager {
         try {
             await this.loadStudents();
             await this.loadCourseOptions();
+            await this.loadGroupOptions();
         } catch (error) {
             console.warn('Error al inicializar StudentsManager:', error);
         }
@@ -36,9 +38,9 @@ class StudentsManager {
         }
 
         // Filtros
-        const courseFilter = document.getElementById('courseFilter');
-        if (courseFilter) {
-            courseFilter.addEventListener('change', () => {
+        const groupFilter = document.getElementById('groupFilter');
+        if (groupFilter) {
+            groupFilter.addEventListener('change', () => {
                 this.applyFilters();
             });
         }
@@ -72,6 +74,12 @@ class StudentsManager {
         this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
             this.courses = courses;
             this.updateCourseOptions();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de grupos
+        this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
+            this.groups = groups;
+            this.updateGroupOptions();
         });
     }
 
@@ -130,16 +138,49 @@ class StudentsManager {
         }
     }
 
-    updateCourseSelects() {
-        const courseFilter = document.getElementById('courseFilter');
-        
-        if (courseFilter) {
-            const activeCourses = Object.values(this.courses)
-                .filter(course => course.status === 'active');
+    async loadGroupOptions() {
+        try {
+            // Verificar que la base de datos esté disponible
+            if (!db) {
+                console.warn('Base de datos no disponible para grupos');
+                return;
+            }
+
+            const groupsRef = ref(db, 'groups');
+            const snapshot = await get(groupsRef);
             
-            courseFilter.innerHTML = '<option value="">Todos los cursos</option>' +
-                activeCourses.map(course => 
-                    `<option value="${course.name}">${course.name}</option>`
+            if (snapshot.exists()) {
+                this.groups = snapshot.val();
+            } else {
+                this.groups = {};
+            }
+            
+            this.updateGroupSelects();
+        } catch (error) {
+            console.error('Error al cargar grupos:', error);
+            // Solo mostrar notificación si no es un error de permisos
+            if (window.app && error.code !== 'PERMISSION_DENIED') {
+                console.warn('Error al cargar opciones de grupos:', error);
+            }
+            this.groups = {};
+        }
+    }
+
+    updateCourseSelects() {
+        // Mantener para compatibilidad con otros módulos
+    }
+
+    updateGroupSelects() {
+        const groupFilter = document.getElementById('groupFilter');
+        
+        if (groupFilter) {
+            const activeGroups = Object.values(this.groups)
+                .filter(group => group.status === 'active')
+                .sort((a, b) => a.groupCode.localeCompare(b.groupCode));
+            
+            groupFilter.innerHTML = '<option value="">Todos los grupos</option>' +
+                activeGroups.map(group => 
+                    `<option value="${group.groupCode}">${group.groupCode} - ${group.groupName}</option>`
                 ).join('');
         }
     }
@@ -147,6 +188,11 @@ class StudentsManager {
     // Método para actualizar opciones de cursos (usado por el sistema de tiempo real)
     updateCourseOptions() {
         this.updateCourseSelects();
+    }
+
+    // Método para actualizar opciones de grupos (usado por el sistema de tiempo real)
+    updateGroupOptions() {
+        this.updateGroupSelects();
     }
 
     // Limpiar suscripciones al destruir el módulo
@@ -157,24 +203,28 @@ class StudentsManager {
         if (this.unsubscribeCourses) {
             this.unsubscribeCourses();
         }
+        if (this.unsubscribeGroups) {
+            this.unsubscribeGroups();
+        }
     }
 
     applyFilters() {
-        const courseFilter = document.getElementById('courseFilter')?.value || '';
+        const groupFilter = document.getElementById('groupFilter')?.value || '';
         const searchText = document.getElementById('studentSearch')?.value.toLowerCase() || '';
         const insuranceDateFilter = document.getElementById('insuranceDateFilter')?.value || '';
 
         this.filteredStudents = Object.fromEntries(
             Object.entries(this.students).filter(([id, student]) => {
-                const matchesCourse = !courseFilter || student.course === courseFilter;
+                const matchesGroup = !groupFilter || student.group === groupFilter;
                 const matchesSearch = !searchText || 
                     student.firstName.toLowerCase().includes(searchText) ||
                     student.lastName.toLowerCase().includes(searchText) ||
                     student.email.toLowerCase().includes(searchText) ||
-                    student.studentId.toLowerCase().includes(searchText);
+                    student.studentId.toLowerCase().includes(searchText) ||
+                    (student.group && student.group.toLowerCase().includes(searchText));
                 const matchesInsuranceDate = !insuranceDateFilter || student.insuranceDate === insuranceDateFilter;
                 
-                return matchesCourse && matchesSearch && matchesInsuranceDate;
+                return matchesGroup && matchesSearch && matchesInsuranceDate;
             })
         );
 
@@ -240,10 +290,13 @@ class StudentsManager {
         const student = studentId ? this.students[studentId] : null;
         const isEdit = student !== null;
 
-        // Verificar que los cursos estén cargados
-        if (Object.keys(this.courses).length === 0) {
-            this.loadCourseOptions().then(() => {
-                // Recursivamente llamar a showStudentModal después de cargar los cursos
+        // Verificar que los cursos y grupos estén cargados
+        if (Object.keys(this.courses).length === 0 || Object.keys(this.groups).length === 0) {
+            Promise.all([
+                this.loadCourseOptions(),
+                this.loadGroupOptions()
+            ]).then(() => {
+                // Recursivamente llamar a showStudentModal después de cargar los datos
                 this.showStudentModal(studentId);
             });
             return;
@@ -251,8 +304,12 @@ class StudentsManager {
 
         const activeCourses = Object.values(this.courses)
             .filter(course => course.status === 'active');
+        
+        const activeGroups = Object.values(this.groups)
+            .filter(group => group.status === 'active')
+            .sort((a, b) => a.groupCode.localeCompare(b.groupCode));
 
-        // Verificar que hay cursos disponibles
+        // Verificar que hay cursos y grupos disponibles
         if (activeCourses.length === 0) {
             if (window.app) {
                 window.app.showModal(`
@@ -266,6 +323,27 @@ class StudentsManager {
                         <div style="text-align: center; margin-top: 20px;">
                             <button class="btn-primary" onclick="window.app.closeModal(); window.app.navigateToSection('courses');">
                                 <i class="fas fa-book"></i> Ir a Cursos
+                            </button>
+                        </div>
+                    </div>
+                `);
+            }
+            return;
+        }
+        
+        if (activeGroups.length === 0) {
+            if (window.app) {
+                window.app.showModal(`
+                    <div class="modal-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> No hay grupos disponibles</h3>
+                        <button class="close-modal"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <p>No se pueden crear estudiantes sin grupos activos.</p>
+                        <p>Por favor, primero cree al menos un grupo.</p>
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button class="btn-primary" onclick="window.app.closeModal(); window.app.navigateToSection('groups');">
+                                <i class="fas fa-users"></i> Ir a Grupos
                             </button>
                         </div>
                     </div>
@@ -299,14 +377,15 @@ class StudentsManager {
                     </div>
                     
                     <div class="form-group">
-                        <label for="studentGroup">Número de Grupo *</label>
-                        <input 
-                            type="text" 
-                            id="studentGroup" 
-                            value="${student?.group || ''}" 
-                            required
-                            placeholder="Ej: G1, G2, G3"
-                        >
+                        <label for="studentGroup">Grupo *</label>
+                        <select id="studentGroup" required>
+                            <option value="">Seleccionar grupo</option>
+                            ${activeGroups.map(group => `
+                                <option value="${group.groupCode}" ${student?.group === group.groupCode ? 'selected' : ''}>
+                                    ${group.groupCode} - ${group.groupName}
+                                </option>
+                            `).join('')}
+                        </select>
                     </div>
                 </div>
                 
@@ -539,7 +618,7 @@ class StudentsManager {
         
         const studentData = {
             studentId: document.getElementById('studentId').value.trim(),
-            group: document.getElementById('studentGroup').value.trim(),
+            group: document.getElementById('studentGroup').value,
             cedula: document.getElementById('studentCedula').value.trim(),
             firstName: document.getElementById('firstName').value.trim(),
             lastName: document.getElementById('lastName').value.trim(),

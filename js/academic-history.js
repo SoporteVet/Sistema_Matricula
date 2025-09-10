@@ -15,7 +15,6 @@ class AcademicHistoryManager {
         this.groups = {};
         this.payments = {};
         this.attendance = {};
-        this.grades = {};
         this.filteredStudents = {};
         // No inicializar automáticamente, esperar a que la autenticación esté lista
         this.setupEventListeners();
@@ -58,7 +57,7 @@ class AcademicHistoryManager {
 
     setupRealTimeUpdates() {
         // Escuchar cambios en todas las colecciones relevantes
-        const collections = ['students', 'courses', 'groups', 'payments', 'attendance', 'grades'];
+        const collections = ['students', 'courses', 'groups', 'payments', 'attendance'];
         
         collections.forEach(collection => {
             const collectionRef = ref(db, collection);
@@ -81,7 +80,7 @@ class AcademicHistoryManager {
                 return;
             }
 
-            const collections = ['students', 'courses', 'groups', 'payments', 'attendance', 'grades'];
+            const collections = ['students', 'courses', 'groups', 'payments', 'attendance'];
             
             const promises = collections.map(async (collection) => {
                 const collectionRef = ref(db, collection);
@@ -94,6 +93,13 @@ class AcademicHistoryManager {
             });
 
             await Promise.all(promises);
+            
+            // Debug: Log de grupos cargados
+            console.log('Historial Académico - Grupos cargados:', {
+                totalGroups: Object.keys(this.groups).length,
+                groupsData: this.groups
+            });
+            
             this.updateFilters();
             this.applyFilters();
         } catch (error) {
@@ -155,7 +161,7 @@ class AcademicHistoryManager {
         if (Object.keys(studentsToShow).length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center">
+                    <td colspan="7" class="text-center">
                         <div style="padding: 40px; color: #6c757d;">
                             <i class="fas fa-graduation-cap fa-3x mb-3"></i>
                             <h4>No hay registros académicos</h4>
@@ -182,7 +188,6 @@ class AcademicHistoryManager {
                                 ${this.getStatusText(student.status)}
                             </span>
                         </td>
-                        <td>${studentStats.averageGrade || 'N/A'}</td>
                         <td>
                             <span class="payment-status ${studentStats.paymentStatus}">
                                 ${this.getPaymentStatusText(studentStats.paymentStatus)}
@@ -192,9 +197,6 @@ class AcademicHistoryManager {
                         <td>
                             <button class="btn-info" onclick="window.academicHistoryManager.viewDetailedHistory('${studentId}')" title="Ver historial detallado">
                                 <i class="fas fa-eye"></i>
-                            </button>
-                            <button class="btn-success" onclick="window.academicHistoryManager.manageGrades('${studentId}')" title="Gestionar notas">
-                                <i class="fas fa-star"></i>
                             </button>
                             <button class="btn-secondary" onclick="window.academicHistoryManager.viewStudentProfile('${studentId}')" title="Perfil completo">
                                 <i class="fas fa-user-graduate"></i>
@@ -212,17 +214,42 @@ class AcademicHistoryManager {
         const student = this.students[studentId];
         if (!student) return {};
 
-        // Calcular grupo
-        const studentGroup = Object.values(this.groups).find(group => 
+        // Método 1: Buscar en array group.students
+        let studentGroup = Object.values(this.groups).find(group => 
             group.students && group.students.includes(studentId)
         );
 
-        // Calcular promedio de notas
-        const studentGrades = Object.values(this.grades).filter(grade => 
-            grade.studentId === studentId
-        );
-        const averageGrade = studentGrades.length > 0 ? 
-            (studentGrades.reduce((sum, grade) => sum + parseFloat(grade.grade), 0) / studentGrades.length).toFixed(1) : null;
+        // Método 2: Si no se encuentra, buscar por campo student.group
+        if (!studentGroup && student.group) {
+            studentGroup = Object.values(this.groups).find(group => {
+                const groupId = Object.keys(this.groups).find(key => this.groups[key] === group);
+                const groupName = group.groupName || group.groupCode || '';
+                
+                return student.group === groupId || 
+                       student.group === groupName || 
+                       student.group === group.groupCode;
+            });
+        }
+
+        // Debug: Log para verificar grupos
+        if (studentId === '1' || studentId === '2' || studentId === '3') {
+            console.log(`Debug estudiante ${studentId}:`, {
+                studentGroup,
+                studentGroupField: student.group,
+                allGroups: Object.keys(this.groups).length,
+                groupsData: this.groups
+            });
+        }
+
+        // Obtener el nombre del grupo
+        let groupName = null;
+        if (studentGroup) {
+            groupName = studentGroup.name || 
+                       studentGroup.groupName || 
+                       studentGroup.title || 
+                       studentGroup.displayName ||
+                       `Grupo ${Object.keys(this.groups).find(key => this.groups[key] === studentGroup)}`;
+        }
 
         // Calcular estado de pagos
         const studentPayments = Object.values(this.payments).filter(payment => 
@@ -240,11 +267,9 @@ class AcademicHistoryManager {
         const attendancePercentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
 
         return {
-            group: studentGroup ? studentGroup.groupName : null,
-            averageGrade,
+            group: groupName,
             paymentStatus,
             attendancePercentage,
-            totalGrades: studentGrades.length,
             totalPayments: studentPayments.length,
             pendingPayments: pendingPayments.length,
             totalClasses: totalClasses,
@@ -257,7 +282,6 @@ class AcademicHistoryManager {
         if (!student) return;
 
         const stats = this.calculateStudentStats(studentId);
-        const studentGrades = Object.values(this.grades).filter(grade => grade.studentId === studentId);
         const studentPayments = Object.values(this.payments).filter(payment => payment.studentId === studentId);
         const studentAttendance = Object.values(this.attendance).filter(attendance => attendance.studentId === studentId);
 
@@ -274,7 +298,6 @@ class AcademicHistoryManager {
             
             <div class="academic-history-tabs">
                 <button class="tab-button active" onclick="window.academicHistoryManager.showTab('overview')">Resumen</button>
-                <button class="tab-button" onclick="window.academicHistoryManager.showTab('grades')">Notas</button>
                 <button class="tab-button" onclick="window.academicHistoryManager.showTab('payments')">Pagos</button>
                 <button class="tab-button" onclick="window.academicHistoryManager.showTab('attendance')">Asistencia</button>
             </div>
@@ -292,10 +315,9 @@ class AcademicHistoryManager {
                     
                     <div class="stat-card">
                         <h4>Rendimiento Académico</h4>
-                        <p><strong>Promedio General:</strong> ${stats.averageGrade || 'N/A'}</p>
-                        <p><strong>Total de Notas:</strong> ${stats.totalGrades}</p>
                         <p><strong>Asistencia:</strong> ${stats.attendancePercentage}%</p>
                         <p><strong>Clases Asistidas:</strong> ${stats.attendedClasses}/${stats.totalClasses}</p>
+                        <p><strong>Estado Académico:</strong> <span class="status-badge ${student.status}">${this.getStatusText(student.status)}</span></p>
                     </div>
                     
                     <div class="stat-card">
@@ -307,34 +329,6 @@ class AcademicHistoryManager {
                 </div>
             </div>
             
-            <div id="grades-tab" class="tab-content">
-                <div class="grades-section">
-                    <div class="section-header">
-                        <h4>Historial de Notas</h4>
-                        <button class="btn-primary btn-sm" onclick="window.academicHistoryManager.addGrade('${studentId}')">
-                            <i class="fas fa-plus"></i> Agregar Nota
-                        </button>
-                    </div>
-                    <div class="grades-list">
-                        ${studentGrades.length === 0 ? 
-                            '<p style="color: #6c757d; text-align: center;">No hay notas registradas</p>' :
-                            studentGrades.sort((a, b) => new Date(b.date) - new Date(a.date)).map(grade => `
-                                <div class="grade-item">
-                                    <div class="grade-info">
-                                        <strong>${grade.subject || 'Materia'}</strong>
-                                        <span class="grade-value ${this.getGradeClass(grade.grade)}">${grade.grade}</span>
-                                    </div>
-                                    <div class="grade-details">
-                                        <small>Fecha: ${this.formatDate(grade.date)}</small>
-                                        <small>Tipo: ${grade.type || 'Evaluación'}</small>
-                                        ${grade.description ? `<small>Descripción: ${grade.description}</small>` : ''}
-                                    </div>
-                                </div>
-                            `).join('')
-                        }
-                    </div>
-                </div>
-            </div>
             
             <div id="payments-tab" class="tab-content">
                 <div class="payments-section">
@@ -451,7 +445,7 @@ class AcademicHistoryManager {
                     margin-bottom: 15px;
                 }
                 
-                .grade-item, .payment-item, .attendance-item {
+                .payment-item, .attendance-item {
                     background: #f8f9fa;
                     padding: 15px;
                     margin: 10px 0;
@@ -459,24 +453,12 @@ class AcademicHistoryManager {
                     border: 1px solid #e3e6f0;
                 }
                 
-                .grade-info, .payment-info {
+                .payment-info {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     margin-bottom: 10px;
                 }
-                
-                .grade-value {
-                    font-size: 18px;
-                    font-weight: bold;
-                    padding: 5px 10px;
-                    border-radius: 20px;
-                }
-                
-                .grade-excellent { background-color: #28a745; color: white; }
-                .grade-good { background-color: #17a2b8; color: white; }
-                .grade-average { background-color: #ffc107; color: black; }
-                .grade-poor { background-color: #dc3545; color: white; }
                 
                 .payment-amount {
                     font-size: 16px;
@@ -520,205 +502,6 @@ class AcademicHistoryManager {
         document.querySelector(`.tab-button[onclick*="${tabName}"]`).classList.add('active');
     }
 
-    manageGrades(studentId) {
-        const student = this.students[studentId];
-        if (!student) return;
-
-        const studentGrades = Object.values(this.grades).filter(grade => grade.studentId === studentId);
-
-        const modalContent = `
-            <div class="modal-header">
-                <h3>
-                    <i class="fas fa-star"></i> 
-                    Gestionar Notas - ${student.firstName} ${student.lastName}
-                </h3>
-                <button class="close-modal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="grades-management">
-                <div class="add-grade-section">
-                    <h4>Agregar Nueva Nota</h4>
-                    <form id="gradeForm">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                            <div class="form-group">
-                                <label for="gradeSubject">Materia *</label>
-                                <input type="text" id="gradeSubject" required placeholder="Ej: Anatomía Veterinaria">
-                            </div>
-                            <div class="form-group">
-                                <label for="gradeValue">Nota *</label>
-                                <input type="number" id="gradeValue" min="0" max="100" step="0.1" required placeholder="0-100">
-                            </div>
-                            <div class="form-group">
-                                <label for="gradeType">Tipo de Evaluación *</label>
-                                <select id="gradeType" required>
-                                    <option value="">Seleccionar</option>
-                                    <option value="examen">Examen</option>
-                                    <option value="quiz">Quiz</option>
-                                    <option value="tarea">Tarea</option>
-                                    <option value="proyecto">Proyecto</option>
-                                    <option value="practica">Práctica</option>
-                                    <option value="final">Examen Final</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
-                            <div class="form-group">
-                                <label for="gradeDate">Fecha *</label>
-                                <input type="date" id="gradeDate" required value="${new Date().toISOString().slice(0, 10)}">
-                            </div>
-                            <div class="form-group">
-                                <label for="gradeDescription">Descripción</label>
-                                <input type="text" id="gradeDescription" placeholder="Descripción opcional">
-                            </div>
-                        </div>
-                        <button type="submit" class="btn-primary">
-                            <i class="fas fa-plus"></i> Agregar Nota
-                        </button>
-                    </form>
-                </div>
-                
-                <div class="existing-grades-section">
-                    <h4>Notas Existentes (${studentGrades.length})</h4>
-                    <div class="grades-list">
-                        ${studentGrades.length === 0 ? 
-                            '<p style="color: #6c757d; text-align: center;">No hay notas registradas</p>' :
-                            studentGrades.sort((a, b) => new Date(b.date) - new Date(a.date)).map((grade, index) => `
-                                <div class="grade-item">
-                                    <div class="grade-header">
-                                        <strong>${grade.subject}</strong>
-                                        <span class="grade-value ${this.getGradeClass(grade.grade)}">${grade.grade}</span>
-                                        <button class="btn-danger btn-sm" onclick="window.academicHistoryManager.deleteGrade('${Object.keys(this.grades).find(id => this.grades[id] === grade)}')">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                    <div class="grade-details">
-                                        <small>Tipo: ${grade.type} | Fecha: ${this.formatDate(grade.date)}</small>
-                                        ${grade.description ? `<small>Descripción: ${grade.description}</small>` : ''}
-                                    </div>
-                                </div>
-                            `).join('')
-                        }
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-actions">
-                <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
-                    Cerrar
-                </button>
-            </div>
-            
-            <style>
-                .grades-management {
-                    max-height: 600px;
-                    overflow-y: auto;
-                }
-                
-                .add-grade-section {
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                }
-                
-                .grade-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 10px;
-                }
-                
-                .grade-item {
-                    background: white;
-                    padding: 15px;
-                    margin: 10px 0;
-                    border-radius: 8px;
-                    border: 1px solid #e3e6f0;
-                }
-            </style>
-        `;
-
-        if (window.app) {
-            window.app.showModal(modalContent);
-        }
-
-        // Configurar evento del formulario
-        setTimeout(() => {
-            const gradeForm = document.getElementById('gradeForm');
-            if (gradeForm) {
-                gradeForm.addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    this.saveGrade(studentId);
-                });
-            }
-        }, 100);
-    }
-
-    async saveGrade(studentId) {
-        const gradeData = {
-            studentId: studentId,
-            subject: document.getElementById('gradeSubject').value.trim(),
-            grade: parseFloat(document.getElementById('gradeValue').value),
-            type: document.getElementById('gradeType').value,
-            date: document.getElementById('gradeDate').value,
-            description: document.getElementById('gradeDescription').value.trim(),
-            createdAt: new Date().toISOString()
-        };
-
-        // Validaciones
-        if (!gradeData.subject || !gradeData.grade || !gradeData.type || !gradeData.date) {
-            if (window.app) {
-                window.app.showNotification('Complete todos los campos requeridos', 'error');
-            }
-            return;
-        }
-
-        if (gradeData.grade < 0 || gradeData.grade > 100) {
-            if (window.app) {
-                window.app.showNotification('La nota debe estar entre 0 y 100', 'error');
-            }
-            return;
-        }
-
-        try {
-            const gradesRef = ref(db, 'grades');
-            await push(gradesRef, gradeData);
-
-            if (window.app) {
-                window.app.showNotification('Nota agregada exitosamente', 'success');
-            }
-
-            // Recargar modal
-            setTimeout(() => this.manageGrades(studentId), 500);
-
-        } catch (error) {
-            console.error('Error al guardar nota:', error);
-            if (window.app) {
-                window.app.showNotification('Error al guardar la nota', 'error');
-            }
-        }
-    }
-
-    async deleteGrade(gradeId) {
-        if (!confirm('¿Está seguro de que desea eliminar esta nota?')) return;
-
-        try {
-            const gradeRef = ref(db, `grades/${gradeId}`);
-            await remove(gradeRef);
-
-            if (window.app) {
-                window.app.showNotification('Nota eliminada exitosamente', 'success');
-            }
-
-        } catch (error) {
-            console.error('Error al eliminar nota:', error);
-            if (window.app) {
-                window.app.showNotification('Error al eliminar la nota', 'error');
-            }
-        }
-    }
 
     generateReport(studentId) {
         // Implementación básica para generar reporte
@@ -744,14 +527,36 @@ class AcademicHistoryManager {
         }
 
         const stats = this.calculateStudentStats(studentId);
-        const studentGrades = Object.values(this.grades).filter(grade => grade.studentId === studentId);
         const studentPayments = Object.values(this.payments).filter(payment => payment.studentId === studentId);
         const studentAttendance = Object.values(this.attendance).filter(attendance => attendance.studentId === studentId);
 
         // Obtener información del grupo
-        const studentGroup = Object.values(this.groups).find(group => 
+        // Método 1: Buscar en array group.students
+        let studentGroup = Object.values(this.groups).find(group => 
             group.students && group.students.includes(studentId)
         );
+
+        // Método 2: Si no se encuentra, buscar por campo student.group
+        if (!studentGroup && student.group) {
+            studentGroup = Object.values(this.groups).find(group => {
+                const groupId = Object.keys(this.groups).find(key => this.groups[key] === group);
+                const groupName = group.groupName || group.groupCode || '';
+                
+                return student.group === groupId || 
+                       student.group === groupName || 
+                       student.group === group.groupCode;
+            });
+        }
+        
+        // Obtener el nombre del grupo
+        let groupName = 'Sin grupo';
+        if (studentGroup) {
+            groupName = studentGroup.name || 
+                       studentGroup.groupName || 
+                       studentGroup.title || 
+                       studentGroup.displayName ||
+                       `Grupo ${Object.keys(this.groups).find(key => this.groups[key] === studentGroup)}`;
+        }
 
         const initials = `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
 
@@ -775,7 +580,7 @@ class AcademicHistoryManager {
                         <p><strong>Email:</strong> ${student.email}</p>
                         <p><strong>Teléfono:</strong> ${student.phone || 'No registrado'}</p>
                         <p><strong>Curso:</strong> ${student.course}</p>
-                        <p><strong>Grupo:</strong> ${studentGroup ? `${studentGroup.groupName} (${studentGroup.groupCode})` : 'Sin asignar'}</p>
+                        <p><strong>Grupo:</strong> ${groupName}</p>
                         <p><strong>Estado:</strong> <span class="status-badge ${student.status}">${this.getStatusText(student.status)}</span></p>
                     </div>
                 </div>
@@ -785,11 +590,6 @@ class AcademicHistoryManager {
                         <div class="performance-value ${this.getPerformanceClass(stats.attendancePercentage, 'attendance')}">${stats.attendancePercentage}%</div>
                         <div class="performance-label">Asistencia</div>
                         <small>${stats.attendedClasses}/${stats.totalClasses} clases</small>
-                    </div>
-                    <div class="performance-card">
-                        <div class="performance-value ${this.getGradeClass(stats.averageGrade)}">${stats.averageGrade || 'N/A'}</div>
-                        <div class="performance-label">Promedio</div>
-                        <small>${stats.totalGrades} evaluaciones</small>
                     </div>
                     <div class="performance-card">
                         <div class="performance-value ${stats.pendingPayments > 0 ? 'poor' : 'excellent'}">${stats.pendingPayments}</div>
@@ -824,26 +624,6 @@ class AcademicHistoryManager {
                 </div>
             </div>
             
-            <div class="student-profile-section">
-                <h4><i class="fas fa-star"></i> Últimas Evaluaciones</h4>
-                <div style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
-                    ${studentGrades.length === 0 ? 
-                        '<p style="color: #6c757d; text-align: center;">No hay notas registradas</p>' :
-                        studentGrades
-                            .sort((a, b) => new Date(b.date) - new Date(a.date))
-                            .slice(0, 5)
-                            .map(grade => `
-                                <div class="grade-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 4px 0; background: #f8f9fa; border-radius: 6px;">
-                                    <div>
-                                        <strong>${grade.subject}</strong><br>
-                                        <small>${grade.type} - ${this.formatDate(grade.date)}</small>
-                                    </div>
-                                    <span class="grade-value ${this.getGradeClass(grade.grade)}">${grade.grade}</span>
-                                </div>
-                            `).join('')
-                    }
-                </div>
-            </div>
             
             <div class="form-actions">
                 <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
@@ -851,9 +631,6 @@ class AcademicHistoryManager {
                 </button>
                 <button type="button" class="btn-primary" onclick="window.academicHistoryManager.viewDetailedHistory('${studentId}')">
                     <i class="fas fa-graduation-cap"></i> Ver Historial Completo
-                </button>
-                <button type="button" class="btn-success" onclick="window.academicHistoryManager.manageGrades('${studentId}')">
-                    <i class="fas fa-star"></i> Gestionar Notas
                 </button>
             </div>
         `;
@@ -893,13 +670,6 @@ class AcademicHistoryManager {
         return statusMap[status] || status;
     }
 
-    getGradeClass(grade) {
-        const numGrade = parseFloat(grade);
-        if (numGrade >= 90) return 'grade-excellent';
-        if (numGrade >= 80) return 'grade-good';
-        if (numGrade >= 70) return 'grade-average';
-        return 'grade-poor';
-    }
 
     formatDate(date) {
         return new Intl.DateTimeFormat('es-ES').format(new Date(date));

@@ -30,14 +30,6 @@ class AttendanceManager {
 
     setupEventListeners() {
         // Filtros principales que cargan estudiantes automáticamente
-        const attendanceCourseFilter = document.getElementById('attendanceCourseFilter');
-        if (attendanceCourseFilter) {
-            attendanceCourseFilter.addEventListener('change', () => {
-                this.loadGroupsForCourse();
-                this.loadStudentsInTable();
-            });
-        }
-
         const attendanceGroupFilter = document.getElementById('attendanceGroupFilter');
         if (attendanceGroupFilter) {
             attendanceGroupFilter.addEventListener('change', () => {
@@ -64,6 +56,9 @@ class AttendanceManager {
 
         // Configurar actualización en tiempo real
         this.setupRealTimeUpdates();
+        
+        // Asegurar que la fecha esté actualizada
+        this.setCurrentDate();
     }
 
     setupRealTimeUpdates() {
@@ -78,8 +73,8 @@ class AttendanceManager {
                     this[collection] = {};
                 }
                 
-                if (collection === 'courses') {
-                    this.updateCourseFilter();
+                if (collection === 'groups') {
+                    this.updateGroupFilter();
                 }
             });
         });
@@ -106,7 +101,7 @@ class AttendanceManager {
             });
 
             await Promise.all(promises);
-            this.updateCourseFilter();
+            this.updateGroupFilter();
         } catch (error) {
             console.error('Error al cargar datos:', error);
             // Solo mostrar notificación si no es un error de permisos
@@ -116,111 +111,86 @@ class AttendanceManager {
         }
     }
 
-    updateCourseFilter() {
-        const attendanceCourseFilter = document.getElementById('attendanceCourseFilter');
+    updateGroupFilter() {
+        const attendanceGroupFilter = document.getElementById('attendanceGroupFilter');
         
-        if (attendanceCourseFilter) {
-            const activeCourses = Object.values(this.courses)
-                .filter(course => course.status === 'active');
+        if (attendanceGroupFilter) {
+            const activeGroups = Object.entries(this.groups)
+                .filter(([id, group]) => group.status === 'active')
+                .map(([id, group]) => ({ id, ...group }));
             
-            attendanceCourseFilter.innerHTML = '<option value="">Seleccionar curso</option>' +
-                activeCourses.map(course => 
-                    `<option value="${course.name}">${course.name}</option>`
+            attendanceGroupFilter.innerHTML = '<option value="">Seleccionar grupo</option>' +
+                activeGroups.map(group => 
+                    `<option value="${group.id}">${group.groupCode} - ${group.groupName}</option>`
                 ).join('');
         }
     }
 
-    loadGroupsForCourse() {
-        const courseFilter = document.getElementById('attendanceCourseFilter');
-        const groupFilter = document.getElementById('attendanceGroupFilter');
-        
-        if (!courseFilter || !groupFilter) return;
-
-        const selectedCourse = courseFilter.value;
-        
-        if (!selectedCourse) {
-            groupFilter.innerHTML = '<option value="">Todos los grupos</option>';
-            return;
-        }
-
-        const courseGroups = Object.entries(this.groups)
-            .filter(([id, group]) => group.courseName === selectedCourse && group.status === 'active')
-            .map(([id, group]) => ({ id, ...group }));
-
-        groupFilter.innerHTML = '<option value="">Todos los grupos</option>' +
-            courseGroups.map(group => 
-                `<option value="${group.id}">${group.groupName} (${group.groupCode})</option>`
-            ).join('');
-    }
+    // Método eliminado - ya no necesitamos cargar grupos por curso
 
     async loadStudentsInTable() {
-        const courseFilter = document.getElementById('attendanceCourseFilter');
         const groupFilter = document.getElementById('attendanceGroupFilter');
         const dateFilter = document.getElementById('attendanceDate');
         
-        // Si no hay curso seleccionado, mostrar tabla vacía
-        if (!courseFilter.value) {
+        // Si no hay grupo seleccionado, mostrar tabla vacía
+        if (!groupFilter.value) {
             this.renderEmptyTable();
             return;
         }
 
-        const selectedCourse = courseFilter.value;
+        // Verificar si los datos están cargados
+        if (Object.keys(this.students).length === 0 || Object.keys(this.groups).length === 0) {
+            await this.loadAllData();
+        }
+
         const selectedGroup = groupFilter.value;
         const selectedDate = dateFilter.value || new Date().toISOString().slice(0, 10);
+        
 
         try {
             let studentsToShow = [];
+            let selectedCourse = '';
 
-            // DEBUG: Mostrar información detallada
-            console.log('=== DEBUG ASISTENCIA ===');
-            console.log('Curso seleccionado:', selectedCourse);
-            console.log('Grupo seleccionado:', selectedGroup);
-            console.log('Total estudiantes en sistema:', Object.keys(this.students).length);
-            console.log('Todos los estudiantes:', this.students);
-
-            if (selectedGroup) {
-                // Obtener estudiantes del grupo específico
-                const group = this.groups[selectedGroup];
-                console.log('Datos del grupo:', group);
-                if (group && group.students) {
-                    studentsToShow = group.students
-                        .map(studentId => ({ id: studentId, ...this.students[studentId] }))
-                        .filter(student => student && student.course === selectedCourse && student.status === 'active');
-                    console.log('Estudiantes del grupo (antes filtro):', group.students);
-                    console.log('Estudiantes del grupo (después filtro):', studentsToShow);
-                }
-            } else {
-                // Obtener todos los estudiantes del curso
-                console.log('Buscando estudiantes del curso:', selectedCourse);
-                
-                // Analizar cada estudiante
-                Object.entries(this.students).forEach(([id, student]) => {
-                    console.log(`Estudiante ${id}:`, {
-                        nombre: `${student.firstName} ${student.lastName}`,
-                        curso: student.course,
-                        estado: student.status,
-                        coincideCurso: student.course === selectedCourse,
-                        esActivo: student.status === 'active'
-                    });
-                });
-                
-                studentsToShow = Object.entries(this.students)
-                    .filter(([id, student]) => 
-                        student.course === selectedCourse && 
-                        student.status === 'active'
-                    )
-                    .map(([id, student]) => ({ id, ...student }));
-                    
-                console.log('Estudiantes filtrados:', studentsToShow);
-            }
+            // Obtener estudiantes del grupo específico
+            const group = this.groups[selectedGroup];
             
-            console.log('Total estudiantes a mostrar:', studentsToShow.length);
-            console.log('========================');
+            if (group) {
+                selectedCourse = group.courseName || 'N/A'; // Solo para mostrar en la tabla
+                
+                if (group.students && group.students.length > 0) {
+                    // Mapear estudiantes con información detallada
+                    const mappedStudents = group.students.map(studentId => {
+                        const studentData = this.students[studentId];
+                        return { id: studentId, ...studentData };
+                    });
+                    
+                    studentsToShow = mappedStudents.filter(student => {
+                        return student && student.firstName && student.lastName && student.status === 'active';
+                    });
+                    
+                } else {
+                    // Buscar estudiantes que tengan este grupo asignado en su campo 'group'
+                    // Los estudiantes pueden tener el nombre/código del grupo, no el ID
+                    const groupName = group.groupName || group.groupCode || '';
+                    
+                    studentsToShow = Object.entries(this.students)
+                        .filter(([studentId, student]) => {
+                            // Comparar con el ID del grupo, nombre del grupo, o código del grupo
+                            const belongsToGroupById = student.group === selectedGroup;
+                            const belongsToGroupByName = student.group === groupName;
+                            const belongsToGroupByCode = student.group === group.groupCode;
+                            const belongsToGroup = belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
+                            
+                            return belongsToGroup && student && student.firstName && student.lastName && student.status === 'active';
+                        })
+                        .map(([studentId, student]) => ({ id: studentId, ...student }));
+                }
+            }
 
             // Verificar registros de asistencia existentes para esta fecha
             const existingAttendance = Object.entries(this.attendance)
                 .filter(([id, record]) => 
-                    record.course === selectedCourse && 
+                    record.group === selectedGroup && 
                     record.date === selectedDate
                 )
                 .reduce((acc, [id, record]) => {
@@ -254,11 +224,11 @@ class AttendanceManager {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="text-center">
-                    <div style="padding: 40px; color: #6c757d;">
-                        <i class="fas fa-calendar-check fa-3x mb-3"></i>
-                        <h4>Seleccione un curso para comenzar</h4>
-                        <p>Elija un curso, grupo (opcional) y fecha para cargar los estudiantes</p>
-                    </div>
+                        <div style="padding: 40px; color: #6c757d;">
+                            <i class="fas fa-calendar-check fa-3x mb-3"></i>
+                            <h4>Seleccione un grupo para comenzar</h4>
+                            <p>Elija un grupo y fecha para cargar los estudiantes</p>
+                        </div>
                 </td>
             </tr>
         `;
@@ -289,7 +259,12 @@ class AttendanceManager {
             return;
         }
 
-        const groupName = groupId ? (this.groups[groupId]?.groupName || 'Sin grupo') : 'Todos los grupos';
+        const groupName = groupId ? (this.groups[groupId]?.groupName || 'Sin grupo') : 'Sin grupo';
+        
+        // Obtener la fecha actual del campo de fecha, no del parámetro
+        const dateFilter = document.getElementById('attendanceDate');
+        const currentDate = dateFilter ? dateFilter.value : date;
+        
 
         tbody.innerHTML = students.map(student => {
             const existingRecord = existingAttendance[student.id];
@@ -306,7 +281,7 @@ class AttendanceManager {
                     </td>
                     <td>${course}</td>
                     <td>${groupName}</td>
-                    <td>${this.formatDate(date)}</td>
+                    <td>${this.formatDate(currentDate)}</td>
                     <td>
                         <div class="status-selector">
                             <select class="attendance-status-select" data-student-id="${student.id}" onchange="window.attendanceManager.updateStudentStatus('${student.id}', this.value)">
@@ -351,21 +326,30 @@ class AttendanceManager {
     }
 
     async saveAllAttendance() {
-        const courseFilter = document.getElementById('attendanceCourseFilter');
         const groupFilter = document.getElementById('attendanceGroupFilter');
         const dateFilter = document.getElementById('attendanceDate');
         
-        if (!courseFilter.value || !dateFilter.value) {
+        if (!groupFilter.value) {
             if (window.app) {
-                window.app.showNotification('Seleccione curso y fecha', 'error');
+                window.app.showNotification('Seleccione un grupo', 'error');
             }
             return;
         }
 
         try {
-            const course = courseFilter.value;
-            const date = dateFilter.value;
             const group = groupFilter.value;
+            // Usar fecha actual si no hay fecha seleccionada
+            let date = dateFilter.value;
+            if (!date) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                date = `${year}-${month}-${day}`;
+                dateFilter.value = date; // Actualizar el campo también
+            }
+            const groupData = this.groups[group];
+            const course = groupData ? groupData.courseName : '';
             
             const attendanceRecords = [];
             const updates = [];
@@ -387,7 +371,7 @@ class AttendanceManager {
                     date: date,
                     status: status,
                     notes: notes,
-                    group: group || null,
+                    group: group,
                     updatedAt: new Date().toISOString()
                 };
 
@@ -570,7 +554,36 @@ class AttendanceManager {
     }
 
     formatDate(date) {
-        return new Intl.DateTimeFormat('es-ES').format(new Date(date));
+        // Si la fecha viene en formato YYYY-MM-DD, parsearla correctamente
+        if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [year, month, day] = date.split('-');
+            const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            return new Intl.DateTimeFormat('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }).format(dateObj);
+        }
+        
+        return new Intl.DateTimeFormat('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        }).format(new Date(date));
+    }
+
+    setCurrentDate() {
+        const attendanceDate = document.getElementById('attendanceDate');
+        if (attendanceDate) {
+            // Establecer fecha actual en formato YYYY-MM-DD
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const currentDate = `${year}-${month}-${day}`;
+            
+            attendanceDate.value = currentDate;
+        }
     }
 
     // Obtener estadísticas de asistencia

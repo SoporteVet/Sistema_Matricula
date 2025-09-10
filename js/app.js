@@ -40,52 +40,93 @@ class App {
         // Inicializar módulos después de la autenticación
         setTimeout(() => {
             // Inicializar reportes después de la autenticación
-            if (window.reportsManager) {
-                window.reportsManager.initializeAfterAuth().catch(error => {
-                    console.warn('Error al inicializar reportes después de auth:', error);
-                });
+            if (window.reportsManager && typeof window.reportsManager.initializeAfterAuth === 'function') {
+                const reportsPromise = window.reportsManager.initializeAfterAuth();
+                if (reportsPromise && typeof reportsPromise.catch === 'function') {
+                    reportsPromise.catch(error => {
+                        console.warn('Error al inicializar reportes después de auth:', error);
+                    });
+                }
             }
             
             // Inicializar grupos
-            if (window.groupsManager) {
-                window.groupsManager.init().catch(error => {
-                    console.warn('Error al inicializar grupos:', error);
-                });
+            if (window.groupsManager && typeof window.groupsManager.init === 'function') {
+                const groupsPromise = window.groupsManager.init();
+                if (groupsPromise && typeof groupsPromise.catch === 'function') {
+                    groupsPromise.catch(error => {
+                        console.warn('Error al inicializar grupos:', error);
+                    });
+                }
             }
             
             // Inicializar estudiantes
-            if (window.studentsManager) {
-                window.studentsManager.init().catch(error => {
-                    console.warn('Error al inicializar estudiantes:', error);
-                });
+            if (window.studentsManager && typeof window.studentsManager.init === 'function') {
+                const studentsPromise = window.studentsManager.init();
+                if (studentsPromise && typeof studentsPromise.catch === 'function') {
+                    studentsPromise.catch(error => {
+                        console.warn('Error al inicializar estudiantes:', error);
+                    });
+                }
             }
             
             // Inicializar cursos
-            if (window.coursesManager) {
-                window.coursesManager.init().catch(error => {
-                    console.warn('Error al inicializar cursos:', error);
-                });
+            if (window.coursesManager && typeof window.coursesManager.init === 'function') {
+                const coursesPromise = window.coursesManager.init();
+                if (coursesPromise && typeof coursesPromise.catch === 'function') {
+                    coursesPromise.catch(error => {
+                        console.warn('Error al inicializar cursos:', error);
+                    });
+                }
             }
             
             // Inicializar pagos
-            if (window.paymentsManager) {
-                window.paymentsManager.init().catch(error => {
-                    console.warn('Error al inicializar pagos:', error);
-                });
+            if (window.paymentsManager && typeof window.paymentsManager.init === 'function') {
+                const paymentsPromise = window.paymentsManager.init();
+                if (paymentsPromise && typeof paymentsPromise.catch === 'function') {
+                    paymentsPromise.catch(error => {
+                        console.warn('Error al inicializar pagos:', error);
+                    });
+                }
             }
             
             // Inicializar asistencia
-            if (window.attendanceManager) {
-                window.attendanceManager.init().catch(error => {
-                    console.warn('Error al inicializar asistencia:', error);
-                });
+            if (window.attendanceManager && typeof window.attendanceManager.init === 'function') {
+                const attendancePromise = window.attendanceManager.init();
+                if (attendancePromise && typeof attendancePromise.catch === 'function') {
+                    attendancePromise.catch(error => {
+                        console.warn('Error al inicializar asistencia:', error);
+                    });
+                }
             }
             
             // Inicializar historial académico
-            if (window.academicHistoryManager) {
-                window.academicHistoryManager.init().catch(error => {
-                    console.warn('Error al inicializar historial académico:', error);
-                });
+            if (window.academicHistoryManager && typeof window.academicHistoryManager.init === 'function') {
+                const academicPromise = window.academicHistoryManager.init();
+                if (academicPromise && typeof academicPromise.catch === 'function') {
+                    academicPromise.catch(error => {
+                        console.warn('Error al inicializar historial académico:', error);
+                    });
+                }
+            }
+            
+            // Inicializar sistema de notas
+            if (window.gradesManager && typeof window.gradesManager.init === 'function') {
+                const gradesPromise = window.gradesManager.init();
+                if (gradesPromise && typeof gradesPromise.catch === 'function') {
+                    gradesPromise.catch(error => {
+                        console.warn('Error al inicializar sistema de notas:', error);
+                    });
+                }
+            }
+            
+            // Inicializar cronograma
+            if (window.cronogramaManager && typeof window.cronogramaManager.init === 'function') {
+                const cronogramaPromise = window.cronogramaManager.init();
+                if (cronogramaPromise && typeof cronogramaPromise.catch === 'function') {
+                    cronogramaPromise.catch(error => {
+                        console.warn('Error al inicializar cronograma:', error);
+                    });
+                }
             }
         }, 1000); // Esperar 1 segundo después de la autenticación
     }
@@ -216,6 +257,11 @@ class App {
                         await window.reportsManager.loadReports();
                     } else {
                         console.warn('No se pueden cargar reportes: usuario no autenticado');
+                    }
+                    break;
+                case 'cronograma':
+                    if (window.cronogramaManager) {
+                        await window.cronogramaManager.loadEvents();
                     }
                     break;
                 case 'users':

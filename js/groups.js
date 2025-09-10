@@ -187,7 +187,7 @@ class GroupsManager {
                     <td>${group.courseName}</td>
                     <td><span class="badge ${group.period}">${this.getPeriodText(group.period)}</span></td>
                     <td>${group.year}</td>
-                    <td>${group.students ? group.students.length : 0} estudiantes</td>
+                    <td>${this.getGroupStudentCount(id, group)} estudiantes</td>
                     <td>
                         <span class="status-badge ${group.status}">
                             ${this.getStatusText(group.status)}
@@ -271,9 +271,10 @@ class GroupsManager {
                         <label for="groupPeriod">Período Académico *</label>
                         <select id="groupPeriod" required>
                             <option value="">Seleccionar período</option>
-                            <option value="semestral" ${group?.period === 'semestral' ? 'selected' : ''}>Semestral</option>
-                            <option value="cuatrimestral" ${group?.period === 'cuatrimestral' ? 'selected' : ''}>Cuatrimestral</option>
+                            <option value="mensual" ${group?.period === 'mensual' ? 'selected' : ''}>Mensual</option>
                             <option value="trimestral" ${group?.period === 'trimestral' ? 'selected' : ''}>Trimestral</option>
+                            <option value="cuatrimestral" ${group?.period === 'cuatrimestral' ? 'selected' : ''}>Cuatrimestral</option>
+                            <option value="semestral" ${group?.period === 'semestral' ? 'selected' : ''}>Semestral</option>
                             <option value="anual" ${group?.period === 'anual' ? 'selected' : ''}>Anual</option>
                         </select>
                     </div>
@@ -456,9 +457,30 @@ class GroupsManager {
                 !(group.students || []).includes(id)
             );
 
-        const groupStudents = (group.students || [])
-            .map(studentId => this.students[studentId])
-            .filter(student => student);
+        // Usar el mismo método que en el conteo de la tabla
+        let groupStudents = [];
+        
+        if (group.students && group.students.length > 0) {
+            // Método 1: Usar array group.students
+            groupStudents = group.students
+                .map(studentId => this.students[studentId])
+                .filter(student => student && student.status === 'active');
+        } else {
+            // Método 2: Buscar estudiantes por campo group
+            const groupName = group.groupName || group.groupCode || '';
+            
+            groupStudents = Object.entries(this.students)
+                .filter(([studentId, student]) => {
+                    if (!student || student.status !== 'active') return false;
+                    
+                    const belongsToGroupById = student.group === groupId;
+                    const belongsToGroupByName = student.group === groupName;
+                    const belongsToGroupByCode = student.group === group.groupCode;
+                    
+                    return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
+                })
+                .map(([studentId, student]) => ({ id: studentId, ...student }));
+        }
 
         const modalContent = `
             <div class="modal-header">
@@ -623,9 +645,26 @@ class GroupsManager {
         const group = this.groups[groupId];
         if (!group) return;
 
-        const groupStudents = (group.students || [])
-            .map(studentId => this.students[studentId])
-            .filter(student => student);
+        // Usar el mismo método de conteo que en la tabla
+        const studentCount = this.getGroupStudentCount(groupId, group);
+        
+        let groupStudents = [];
+        if (group.students && group.students.length > 0) {
+            groupStudents = group.students
+                .map(studentId => this.students[studentId])
+                .filter(student => student && student.status === 'active');
+        } else {
+            const groupName = group.groupName || group.groupCode || '';
+            groupStudents = Object.entries(this.students)
+                .filter(([studentId, student]) => {
+                    if (!student || student.status !== 'active') return false;
+                    const belongsToGroupById = student.group === groupId;
+                    const belongsToGroupByName = student.group === groupName;
+                    const belongsToGroupByCode = student.group === group.groupCode;
+                    return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
+                })
+                .map(([studentId, student]) => ({ id: studentId, ...student }));
+        }
 
         const modalContent = `
             <div class="modal-header">
@@ -746,9 +785,10 @@ class GroupsManager {
 
     getPeriodText(period) {
         const periodMap = {
-            'semestral': 'Semestral',
-            'cuatrimestral': 'Cuatrimestral',
+            'mensual': 'Mensual',
             'trimestral': 'Trimestral',
+            'cuatrimestral': 'Cuatrimestral',
+            'semestral': 'Semestral',
             'anual': 'Anual'
         };
         return periodMap[period] || period;
@@ -785,6 +825,35 @@ class GroupsManager {
     // Obtener grupo por ID
     getGroup(groupId) {
         return this.groups[groupId] || null;
+    }
+
+    getGroupStudentCount(groupId, group) {
+        // Método 1: Usar array group.students si existe y tiene elementos
+        if (group.students && group.students.length > 0) {
+            // Contar solo estudiantes activos
+            const activeStudents = group.students.filter(studentId => {
+                const student = this.students[studentId];
+                return student && student.status === 'active';
+            });
+            return activeStudents.length;
+        }
+        
+        // Método 2: Buscar estudiantes por campo group (mismo método que asistencia)
+        const groupName = group.groupName || group.groupCode || '';
+        
+        const studentsInGroup = Object.values(this.students || {})
+            .filter(student => {
+                if (!student || student.status !== 'active') return false;
+                
+                // Comparar con el ID del grupo, nombre del grupo, o código del grupo
+                const belongsToGroupById = student.group === groupId;
+                const belongsToGroupByName = student.group === groupName;
+                const belongsToGroupByCode = student.group === group.groupCode;
+                
+                return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
+            });
+            
+        return studentsInGroup.length;
     }
 }
 

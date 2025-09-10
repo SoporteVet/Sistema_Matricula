@@ -33,7 +33,6 @@ class ReportsManager {
     initializeAfterAuth() {
         // Verificar que la autenticación esté completa
         if (!window.auth || !window.auth.currentUser) {
-            console.warn('ReportsManager: Usuario no autenticado, esperando...');
             setTimeout(() => this.initializeAfterAuth(), 1000);
             return;
         }
