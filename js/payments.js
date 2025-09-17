@@ -731,7 +731,7 @@ class PaymentsManager {
                 .filter(([id, group]) => group.status === 'active')
                 .map(([id, group]) => ({
                     id,
-                    name: `${group.groupName} (${group.groupCode}) - ${group.courseName}`
+                    name: `${group.groupName} (${group.groupCode}) - ${group.academicLevel || group.courseName || 'N/A'}`
                 }));
             
             giraGroupFilter.innerHTML = '<option value="">Todos los grupos</option>' +

@@ -263,8 +263,10 @@ class AcademicHistoryManager {
             attendance.studentId === studentId
         );
         const totalClasses = studentAttendance.length;
-        const attendedClasses = studentAttendance.filter(attendance => attendance.status === 'present').length;
-        const attendancePercentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
+        const attendedClasses = studentAttendance.filter(attendance => 
+            attendance.status === 'P' || attendance.status === 'present'
+        ).length;
+        const attendancePercentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 0;
 
         return {
             group: groupName,
@@ -367,10 +369,9 @@ class AcademicHistoryManager {
                             '<p style="color: #6c757d; text-align: center;">No hay registros de asistencia</p>' :
                             studentAttendance.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20).map(attendance => `
                                 <div class="attendance-item">
-                                    <span class="attendance-date">${this.formatDate(attendance.date)}</span>
+                                    <span class="attendance-date">${this.formatAttendanceDate(attendance.date, attendance.displayDate)}</span>
                                     <span class="attendance-status ${attendance.status}">
-                                        ${attendance.status === 'present' ? 'Presente' : 
-                                          attendance.status === 'absent' ? 'Ausente' : 'Tardanza'}
+                                        ${this.getAttendanceStatusText(attendance.status)}
                                     </span>
                                     ${attendance.notes ? `<small>${attendance.notes}</small>` : ''}
                                 </div>
@@ -668,6 +669,37 @@ class AcademicHistoryManager {
             'up-to-date': 'Al día'
         };
         return statusMap[status] || status;
+    }
+
+    getAttendanceStatusText(status) {
+        const statusMap = {
+            'P': 'Presente',
+            'A': 'Ausente',
+            'T': 'Tardanza',
+            'CONGELADO': 'Congelado',
+            'present': 'Presente',
+            'absent': 'Ausente',
+            'late': 'Tardanza'
+        };
+        return statusMap[status] || status;
+    }
+
+    formatAttendanceDate(date, displayDate) {
+        // Si hay displayDate (formato DD-MM), usarlo
+        if (displayDate) {
+            const [day, month] = displayDate.split('-');
+            return `${day}/${month}/2025`;
+        }
+        
+        // Si no, formatear la fecha completa
+        if (date) {
+            const dateObj = new Date(date);
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            return `${day}/${month}/${dateObj.getFullYear()}`;
+        }
+        
+        return 'Fecha no disponible';
     }
 
 

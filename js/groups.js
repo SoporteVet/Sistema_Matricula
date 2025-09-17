@@ -37,9 +37,9 @@ class GroupsManager {
         }
 
         // Filtros
-        const groupCourseFilter = document.getElementById('groupCourseFilter');
-        if (groupCourseFilter) {
-            groupCourseFilter.addEventListener('change', () => {
+        const groupAcademicLevelFilter = document.getElementById('groupAcademicLevelFilter');
+        if (groupAcademicLevelFilter) {
+            groupAcademicLevelFilter.addEventListener('change', () => {
                 this.applyFilters();
             });
         }
@@ -110,13 +110,7 @@ class GroupsManager {
                 this.students = studentsSnapshot.val();
             }
 
-            // Cargar cursos
-            const coursesRef = ref(db, 'courses');
-            const coursesSnapshot = await get(coursesRef);
-            if (coursesSnapshot.exists()) {
-                this.courses = coursesSnapshot.val();
-                this.updateCourseFilter();
-            }
+            // Ya no necesitamos cargar cursos, usamos niveles académicos fijos
         } catch (error) {
             console.error('Error al cargar datos:', error);
             // Solo mostrar notificación si no es un error de permisos
@@ -126,30 +120,19 @@ class GroupsManager {
         }
     }
 
-    updateCourseFilter() {
-        const groupCourseFilter = document.getElementById('groupCourseFilter');
-        
-        if (groupCourseFilter) {
-            const activeCourses = Object.values(this.courses)
-                .filter(course => course.status === 'active');
-            
-            groupCourseFilter.innerHTML = '<option value="">Todos los cursos</option>' +
-                activeCourses.map(course => 
-                    `<option value="${course.name}">${course.name}</option>`
-                ).join('');
-        }
-    }
 
     applyFilters() {
-        const courseFilter = document.getElementById('groupCourseFilter')?.value || '';
+        const academicLevelFilter = document.getElementById('groupAcademicLevelFilter')?.value || '';
         const periodFilter = document.getElementById('groupPeriodFilter')?.value || '';
 
         this.filteredGroups = Object.fromEntries(
             Object.entries(this.groups).filter(([id, group]) => {
-                const matchesCourse = !courseFilter || group.courseName === courseFilter;
+                const matchesAcademicLevel = !academicLevelFilter || 
+                    group.academicLevel === academicLevelFilter || 
+                    group.courseName === academicLevelFilter; // Compatibilidad con datos existentes
                 const matchesPeriod = !periodFilter || group.period === periodFilter;
                 
-                return matchesCourse && matchesPeriod;
+                return matchesAcademicLevel && matchesPeriod;
             })
         );
 
@@ -184,7 +167,7 @@ class GroupsManager {
                 <tr>
                     <td><strong>${group.groupCode}</strong></td>
                     <td>${group.groupName}</td>
-                    <td>${group.courseName}</td>
+                    <td>${group.academicLevel || group.courseName || 'N/A'}</td>
                     <td><span class="badge ${group.period}">${this.getPeriodText(group.period)}</span></td>
                     <td>${group.year}</td>
                     <td>${this.getGroupStudentCount(id, group)} estudiantes</td>
@@ -214,9 +197,6 @@ class GroupsManager {
     showGroupModal(groupId = null) {
         const group = groupId ? this.groups[groupId] : null;
         const isEdit = group !== null;
-
-        const activeCourses = Object.values(this.courses)
-            .filter(course => course.status === 'active');
 
         const modalContent = `
             <div class="modal-header">
@@ -256,14 +236,18 @@ class GroupsManager {
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
-                        <label for="groupCourse">Curso *</label>
-                        <select id="groupCourse" required>
-                            <option value="">Seleccionar curso</option>
-                            ${activeCourses.map(course => `
-                                <option value="${course.name}" ${group?.courseName === course.name ? 'selected' : ''}>
-                                    ${course.name}
-                                </option>
-                            `).join('')}
+                        <label for="groupAcademicLevel">Nivel Académico *</label>
+                        <select id="groupAcademicLevel" required>
+                            <option value="">Seleccionar nivel académico</option>
+                            <option value="Asistente Técnico Veterinario" ${group?.academicLevel === 'Asistente Técnico Veterinario' ? 'selected' : ''}>
+                                Asistente Técnico Veterinario
+                            </option>
+                            <option value="Diplomado" ${group?.academicLevel === 'Diplomado' ? 'selected' : ''}>
+                                Diplomado
+                            </option>
+                            <option value="Curso Libre" ${group?.academicLevel === 'Curso Libre' ? 'selected' : ''}>
+                                Curso Libre
+                            </option>
                         </select>
                     </div>
                     
@@ -366,7 +350,7 @@ class GroupsManager {
         const groupData = {
             groupCode: document.getElementById('groupCode').value.trim(),
             groupName: document.getElementById('groupName').value.trim(),
-            courseName: document.getElementById('groupCourse').value,
+            academicLevel: document.getElementById('groupAcademicLevel').value,
             period: document.getElementById('groupPeriod').value,
             year: parseInt(document.getElementById('groupYear').value),
             startDate: document.getElementById('groupStartDate').value,
@@ -378,7 +362,7 @@ class GroupsManager {
         };
 
         // Validaciones
-        if (!groupData.groupCode || !groupData.groupName || !groupData.courseName || 
+        if (!groupData.groupCode || !groupData.groupName || !groupData.academicLevel || 
             !groupData.period || !groupData.year || !groupData.startDate || !groupData.endDate) {
             if (window.app) {
                 window.app.showNotification('Complete todos los campos requeridos', 'error');
@@ -453,7 +437,7 @@ class GroupsManager {
         const availableStudents = Object.entries(this.students)
             .filter(([id, student]) => 
                 student.status === 'active' && 
-                student.course === group.courseName &&
+                student.course === (group.academicLevel || group.courseName) &&
                 !(group.students || []).includes(id)
             );
 
@@ -682,7 +666,7 @@ class GroupsManager {
                     <div class="detail-grid">
                         <div><strong>Código:</strong> ${group.groupCode}</div>
                         <div><strong>Nombre:</strong> ${group.groupName}</div>
-                        <div><strong>Curso:</strong> ${group.courseName}</div>
+                        <div><strong>Nivel Académico:</strong> ${group.academicLevel || group.courseName || 'N/A'}</div>
                         <div><strong>Período:</strong> ${this.getPeriodText(group.period)}</div>
                         <div><strong>Año:</strong> ${group.year}</div>
                         <div><strong>Estado:</strong> <span class="status-badge ${group.status}">${this.getStatusText(group.status)}</span></div>
@@ -816,7 +800,7 @@ class GroupsManager {
                 id,
                 groupCode: group.groupCode,
                 groupName: group.groupName,
-                courseName: group.courseName,
+                academicLevel: group.academicLevel || group.courseName,
                 period: group.period,
                 year: group.year
             }));

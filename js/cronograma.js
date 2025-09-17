@@ -831,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cronogramaManager.init().catch(error => {
             console.error('Error al inicializar cronograma:', error);
         });
-    }, 500);
+    }, 1000);
 });
 
 // También crear una instancia inmediatamente para compatibilidad

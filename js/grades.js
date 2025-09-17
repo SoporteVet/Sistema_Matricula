@@ -34,8 +34,11 @@ class GradesManager {
         const addEvaluationBtn = document.getElementById('addEvaluationBtn');
         if (addEvaluationBtn) {
             addEvaluationBtn.addEventListener('click', () => {
+                console.log('Botón Nueva Evaluación clickeado');
                 this.showEvaluationModal();
             });
+        } else {
+            console.error('Botón addEvaluationBtn no encontrado en el DOM');
         }
 
         // Filtros
@@ -86,7 +89,18 @@ class GradesManager {
                 const collectionRef = ref(db, collection);
                 const snapshot = await get(collectionRef);
                 if (snapshot.exists()) {
-                    this[collection] = snapshot.val();
+                    const data = snapshot.val();
+                    // Para evaluaciones y notas, agregar el ID de Firebase a cada elemento
+                    if (collection === 'evaluations' || collection === 'grades') {
+                        this[collection] = Object.fromEntries(
+                            Object.entries(data).map(([id, item]) => [
+                                id, 
+                                { ...item, id: id }
+                            ])
+                        );
+                    } else {
+                        this[collection] = data;
+                    }
                 } else {
                     this[collection] = {};
                 }
@@ -111,7 +125,7 @@ class GradesManager {
                 .filter(([id, group]) => group.status === 'active')
                 .map(([id, group]) => ({
                     id,
-                    name: `${group.groupName} (${group.courseName})`
+                    name: `${group.groupName} (${group.academicLevel || group.courseName || 'N/A'})`
                 }));
 
             groupFilter.innerHTML = '<option value="">Seleccionar grupo</option>' +
@@ -146,32 +160,28 @@ class GradesManager {
         const group = this.groups[groupFilter];
         if (!group) return;
 
-        let groupStudents = [];
-
-        // Método 1: Usar array group.students si existe
-        if (group.students && group.students.length > 0) {
-            groupStudents = group.students
-                .map(studentId => this.students[studentId])
-                .filter(student => student && student.status === 'active');
-        } else {
-            // Método 2: Buscar estudiantes por campo group (mismo método que asistencia)
-            const groupName = group.groupName || group.groupCode || '';
-            
-            groupStudents = Object.values(this.students)
-                .filter(student => {
-                    if (!student || student.status !== 'active') return false;
-                    
-                    // Comparar con el ID del grupo, nombre del grupo, o código del grupo
-                    const belongsToGroupById = student.group === groupFilter;
-                    const belongsToGroupByName = student.group === groupName;
-                    const belongsToGroupByCode = student.group === group.groupCode;
-                    
-                    return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
-                });
-        }
+        // Buscar estudiantes que pertenecen a este grupo
+        const groupStudents = Object.entries(this.students)
+            .filter(([studentId, student]) => {
+                if (!student || student.status !== 'active') return false;
+                
+                const groupName = group.groupName || group.name || '';
+                const groupCode = group.groupCode || '';
+                
+                // Comparar con el ID del grupo, nombre del grupo, o código del grupo
+                const belongsToGroupById = student.group === groupFilter;
+                const belongsToGroupByName = student.group === groupName;
+                const belongsToGroupByCode = student.group === groupCode;
+                
+                // También verificar si el estudiante tiene el grupo en el campo course
+                const belongsToGroupByCourse = student.course === groupName || student.course === groupCode;
+                
+                return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode || belongsToGroupByCourse;
+            })
+            .map(([studentId, student]) => ({ id: studentId, ...student }));
 
         this.filteredStudents = Object.fromEntries(
-            groupStudents.map(student => [student.studentId || student.id, student])
+            groupStudents.map(student => [student.id, student])
         );
 
         this.currentGroup = groupFilter;
@@ -183,6 +193,10 @@ class GradesManager {
         if (!tbody) return;
 
         if (!this.currentGroup || Object.keys(this.filteredStudents).length === 0) {
+            const debugInfo = this.currentGroup ? 
+                `Grupo seleccionado: ${this.currentGroup}, Estudiantes encontrados: ${Object.keys(this.filteredStudents).length}` : 
+                'No hay grupo seleccionado';
+                
             tbody.innerHTML = `
                 <tr>
                     <td colspan="100" class="text-center">
@@ -190,6 +204,7 @@ class GradesManager {
                             <i class="fas fa-graduation-cap fa-3x mb-3"></i>
                             <h4>Seleccione un grupo para ver las notas</h4>
                             <p>Use el filtro de grupos para comenzar</p>
+                            <small style="color: #999; margin-top: 10px; display: block;">Debug: ${debugInfo}</small>
                         </div>
                     </td>
                 </tr>
@@ -198,9 +213,8 @@ class GradesManager {
         }
 
         const group = this.groups[this.currentGroup];
-        const evaluations = Object.entries(this.evaluations)
-            .filter(([id, evaluation]) => evaluation.groupId === this.currentGroup)
-            .map(([id, evaluation]) => ({ id, ...evaluation }))
+        const evaluations = Object.values(this.evaluations)
+            .filter(evaluation => evaluation.groupId === this.currentGroup)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         // Crear encabezados dinámicos
@@ -214,14 +228,6 @@ class GradesManager {
                             <div class="eval-type">${this.getEvaluationTypeText(evaluation.type)}</div>
                             <div class="eval-date">${this.formatDate(evaluation.date)}</div>
                             <div class="eval-weight">${evaluation.weight}%</div>
-                            <div class="eval-actions">
-                                <button class="btn-warning btn-xs" onclick="window.gradesManager.showEvaluationModal('${evaluation.id}')" title="Editar evaluación">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn-danger btn-xs" onclick="window.gradesManager.deleteEvaluation('${evaluation.id}')" title="Eliminar evaluación">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
                         </div>
                     </th>
                 `).join('')}
@@ -256,10 +262,7 @@ class GradesManager {
                         `;
                     }).join('')}
                     <td class="average-cell">
-                        <div class="average-info">
-                            <strong class="${this.getAverageClass(average)}">${average.toFixed(1)}%</strong>
-                            <small class="weight-info">${this.getWeightInfo(studentGrades)}</small>
-                        </div>
+                        <strong>${average.toFixed(1)}%</strong>
                     </td>
                     <td>
                         <span class="status-badge ${status}">
@@ -304,27 +307,22 @@ class GradesManager {
     calculateStudentAverage(studentGrades) {
         if (studentGrades.length === 0) return 0;
 
-        let totalWeightedScore = 0;
-        let totalWeight = 0;
+        const totalWeight = studentGrades.reduce((sum, grade) => {
+            const evaluation = Object.values(this.evaluations)
+                .find(evaluation => evaluation.id === grade.evaluationId);
+            return sum + (evaluation ? evaluation.weight : 0);
+        }, 0);
 
-        studentGrades.forEach(grade => {
-            const evaluation = this.evaluations[grade.evaluationId];
-            
-            if (evaluation && evaluation.weight > 0) {
-                // Convertir la nota a porcentaje si es necesario
-                const scorePercentage = (grade.score / evaluation.maxScore) * 100;
-                
-                // Aplicar el peso del rubro
-                totalWeightedScore += scorePercentage * (evaluation.weight / 100);
-                totalWeight += evaluation.weight;
-            }
-        });
-
-        // Si no hay peso total, retornar 0
         if (totalWeight === 0) return 0;
 
-        // Calcular promedio final considerando solo el peso de las evaluaciones calificadas
-        return (totalWeightedScore / totalWeight) * 100;
+        const weightedSum = studentGrades.reduce((sum, grade) => {
+            const evaluation = Object.values(this.evaluations)
+                .find(evaluation => evaluation.id === grade.evaluationId);
+            const weight = evaluation ? evaluation.weight : 0;
+            return sum + (grade.score * weight / 100);
+        }, 0);
+
+        return (weightedSum / totalWeight) * 100;
     }
 
     getStudentStatus(average) {
@@ -333,16 +331,16 @@ class GradesManager {
         return 'failed';
     }
 
-    showEvaluationModal(evaluationId = null, preselectedGroupId = null) {
+    showEvaluationModal(evaluationId = null) {
+        console.log('showEvaluationModal ejecutándose');
         const evaluation = evaluationId ? this.evaluations[evaluationId] : null;
         const isEdit = evaluation !== null;
-        const selectedGroupId = evaluation?.groupId || preselectedGroupId || '';
 
         const activeGroups = Object.entries(this.groups)
             .filter(([id, group]) => group.status === 'active')
             .map(([id, group]) => ({
                 id,
-                name: `${group.groupName} (${group.courseName})`
+                name: `${group.groupName} (${group.academicLevel || group.courseName || 'N/A'})`
             }));
 
         const modalContent = `
@@ -379,7 +377,6 @@ class GradesManager {
                             <option value="attendance" ${evaluation?.type === 'attendance' ? 'selected' : ''}>Asistencia</option>
                             <option value="quiz" ${evaluation?.type === 'quiz' ? 'selected' : ''}>Quiz</option>
                             <option value="lab" ${evaluation?.type === 'lab' ? 'selected' : ''}>Laboratorio</option>
-                            <option value="internship" ${evaluation?.type === 'internship' ? 'selected' : ''}>Práctica Profesional</option>
                         </select>
                     </div>
                 </div>
@@ -390,7 +387,7 @@ class GradesManager {
                         <select id="evaluationGroup" required>
                             <option value="">Seleccionar grupo</option>
                             ${activeGroups.map(group => `
-                                <option value="${group.id}" ${selectedGroupId === group.id ? 'selected' : ''}>
+                                <option value="${group.id}" ${evaluation?.groupId === group.id ? 'selected' : ''}>
                                     ${group.name}
                                 </option>
                             `).join('')}
@@ -462,25 +459,18 @@ class GradesManager {
         // Configurar evento del formulario
         setTimeout(() => {
             const evaluationForm = document.getElementById('evaluationForm');
-            if (evaluationForm && !evaluationForm.hasAttribute('data-listener-attached')) {
-                evaluationForm.setAttribute('data-listener-attached', 'true');
+            if (evaluationForm) {
                 evaluationForm.addEventListener('submit', (e) => {
                     e.preventDefault();
-                    this.saveEvaluation(evaluationId, preselectedGroupId);
+                    this.saveEvaluation(evaluationId);
                 });
             }
         }, 100);
     }
 
-    async saveEvaluation(evaluationId = null, preselectedGroupId = null) {
+    async saveEvaluation(evaluationId = null) {
         const form = document.getElementById('evaluationForm');
         if (!form) return;
-
-        // Verificar si ya se está procesando una solicitud
-        if (form.hasAttribute('data-saving')) {
-            return;
-        }
-        form.setAttribute('data-saving', 'true');
 
         const evaluationData = {
             title: document.getElementById('evaluationTitle').value.trim(),
@@ -523,7 +513,11 @@ class GradesManager {
                 // Crear nueva evaluación
                 evaluationData.createdAt = new Date().toISOString();
                 const evaluationsRef = ref(db, 'evaluations');
-                await push(evaluationsRef, evaluationData);
+                const newEvaluationRef = await push(evaluationsRef, evaluationData);
+                
+                // Obtener el ID generado por Firebase y actualizar el objeto
+                const evaluationId = newEvaluationRef.key;
+                await set(ref(db, `evaluations/${evaluationId}/id`), evaluationId);
             }
 
             if (window.app) {
@@ -544,62 +538,6 @@ class GradesManager {
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = `<i class="fas fa-save"></i> ${evaluationId ? 'Actualizar' : 'Crear'} Evaluación`;
-            }
-            // Remover el flag de guardando
-            form.removeAttribute('data-saving');
-        }
-    }
-
-    async deleteEvaluation(evaluationId) {
-        console.log('=== DEBUG ELIMINAR EVALUACIÓN ===');
-        console.log('ID de evaluación recibido:', evaluationId);
-        console.log('Todas las evaluaciones:', this.evaluations);
-        console.log('IDs disponibles:', Object.keys(this.evaluations));
-        
-        const evaluation = this.evaluations[evaluationId];
-        console.log('Evaluación encontrada:', evaluation);
-        
-        if (!evaluation) {
-            console.log('ERROR: Evaluación no encontrada con ID:', evaluationId);
-            if (window.app) {
-                window.app.showNotification(`Evaluación no encontrada (ID: ${evaluationId})`, 'error');
-            }
-            return;
-        }
-
-        // Confirmar eliminación
-        const confirmMessage = `¿Está seguro de que desea eliminar la evaluación "${evaluation.title}"?\n\nEsta acción también eliminará todas las notas asociadas a esta evaluación y no se puede deshacer.`;
-        
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-
-        try {
-            // Eliminar todas las notas asociadas a esta evaluación
-            const gradesToDelete = Object.entries(this.grades)
-                .filter(([id, grade]) => grade.evaluationId === evaluationId);
-
-            // Eliminar notas asociadas
-            for (const [gradeId, grade] of gradesToDelete) {
-                const gradeRef = ref(db, `grades/${gradeId}`);
-                await remove(gradeRef);
-            }
-
-            // Eliminar la evaluación
-            const evaluationRef = ref(db, `evaluations/${evaluationId}`);
-            await remove(evaluationRef);
-
-            if (window.app) {
-                window.app.showNotification(
-                    `Evaluación "${evaluation.title}" eliminada exitosamente`, 
-                    'success'
-                );
-            }
-
-        } catch (error) {
-            console.error('Error al eliminar evaluación:', error);
-            if (window.app) {
-                window.app.showNotification('Error al eliminar la evaluación', 'error');
             }
         }
     }
@@ -684,12 +622,6 @@ class GradesManager {
         const form = document.getElementById('gradeForm');
         if (!form) return;
 
-        // Verificar si ya se está procesando una solicitud
-        if (form.hasAttribute('data-saving')) {
-            return;
-        }
-        form.setAttribute('data-saving', 'true');
-
         const score = parseFloat(document.getElementById('gradeScore').value);
         const comments = document.getElementById('gradeComments').value.trim();
 
@@ -752,8 +684,6 @@ class GradesManager {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-save"></i> Guardar Nota';
             }
-            // Remover el flag de guardando
-            form.removeAttribute('data-saving');
         }
     }
 
@@ -764,9 +694,8 @@ class GradesManager {
         const studentGrades = Object.values(this.grades)
             .filter(grade => grade.studentId === studentId);
 
-        const evaluations = Object.entries(this.evaluations)
-            .filter(([id, evaluation]) => studentGrades.some(grade => grade.evaluationId === id))
-            .map(([id, evaluation]) => ({ id, ...evaluation }))
+        const evaluations = Object.values(this.evaluations)
+            .filter(evaluation => studentGrades.some(grade => grade.evaluationId === evaluation.id))
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         // Agrupar por tipo de evaluación
@@ -894,9 +823,8 @@ class GradesManager {
         const student = Object.values(this.students).find(s => s.studentId === studentId);
         if (!student) return;
 
-        const evaluations = Object.entries(this.evaluations)
-            .filter(([id, evaluation]) => evaluation.groupId === this.currentGroup)
-            .map(([id, evaluation]) => ({ id, ...evaluation }))
+        const evaluations = Object.values(this.evaluations)
+            .filter(evaluation => evaluation.groupId === this.currentGroup)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
         const studentGrades = Object.values(this.grades)
@@ -919,7 +847,7 @@ class GradesManager {
                 </div>
                 
                 <div class="grades-form">
-                    ${evaluations.length > 0 ? evaluations.map(evaluation => {
+                    ${evaluations.map(evaluation => {
                         const grade = studentGrades.find(g => g.evaluationId === evaluation.id);
                         return `
                             <div class="grade-input-group">
@@ -941,32 +869,16 @@ class GradesManager {
                                 </div>
                             </div>
                         `;
-                    }).join('') : `
-                        <div class="no-evaluations">
-                            <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                <i class="fas fa-clipboard-list fa-3x mb-3"></i>
-                                <h4>No hay evaluaciones creadas</h4>
-                                <p>Primero debe crear evaluaciones para poder asignar notas</p>
-                                <button type="button" class="btn-primary" onclick="window.gradesManager.showEvaluationModal(null, '${this.currentGroup}'); window.app.closeModal();">
-                                    <i class="fas fa-plus"></i> Crear Primera Evaluación
-                                </button>
-                            </div>
-                        </div>
-                    `}
+                    }).join('')}
                 </div>
                 
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
                         Cancelar
                     </button>
-                    ${evaluations.length > 0 ? `
-                        <button type="button" class="btn-info" onclick="window.gradesManager.showEvaluationModal(null, '${this.currentGroup}'); window.app.closeModal();">
-                            <i class="fas fa-plus"></i> Agregar Evaluación
-                        </button>
-                        <button type="submit" class="btn-primary">
-                            <i class="fas fa-save"></i> Guardar Todas las Notas
-                        </button>
-                    ` : ''}
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Guardar Todas las Notas
+                    </button>
                 </div>
             </form>
         `;
@@ -991,12 +903,6 @@ class GradesManager {
         const form = document.getElementById('studentGradesForm');
         if (!form) return;
 
-        // Verificar si ya se está procesando una solicitud
-        if (form.hasAttribute('data-saving')) {
-            return;
-        }
-        form.setAttribute('data-saving', 'true');
-
         try {
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
@@ -1005,6 +911,12 @@ class GradesManager {
             const gradesToSave = [];
 
             for (const evaluation of evaluations) {
+                // Validar que evaluation.id existe
+                if (!evaluation.id) {
+                    console.error('evaluation.id es undefined para evaluación:', evaluation);
+                    continue;
+                }
+
                 const input = document.getElementById(`grade_${evaluation.id}`);
                 const score = parseFloat(input.value);
                 
@@ -1017,7 +929,14 @@ class GradesManager {
             }
 
             // Guardar todas las notas
+            console.log('Guardando notas:', gradesToSave);
             for (const gradeData of gradesToSave) {
+                // Validar que evaluationId no sea undefined
+                if (!gradeData.evaluationId) {
+                    console.error('evaluationId es undefined para:', gradeData);
+                    continue;
+                }
+
                 const existingGrade = Object.entries(this.grades)
                     .find(([id, grade]) => grade.studentId === studentId && grade.evaluationId === gradeData.evaluationId);
 
@@ -1028,17 +947,25 @@ class GradesManager {
                     updatedAt: new Date().toISOString()
                 };
 
+                console.log('Guardando nota:', fullGradeData);
+
                 if (existingGrade) {
                     // Actualizar nota existente
+                    console.log('Actualizando nota existente:', existingGrade[0]);
                     const gradeRef = ref(db, `grades/${existingGrade[0]}`);
                     await set(gradeRef, fullGradeData);
                 } else {
                     // Crear nueva nota
+                    console.log('Creando nueva nota');
                     fullGradeData.createdAt = new Date().toISOString();
                     const gradesRef = ref(db, 'grades');
-                    await push(gradesRef, fullGradeData);
+                    const newGradeRef = await push(gradesRef, fullGradeData);
+                    console.log('Nota creada con ID:', newGradeRef.key);
                 }
             }
+
+            // Recargar datos para mostrar las notas actualizadas
+            await this.loadAllData();
 
             if (window.app) {
                 window.app.closeModal();
@@ -1056,8 +983,6 @@ class GradesManager {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-save"></i> Guardar Todas las Notas';
             }
-            // Remover el flag de guardando
-            form.removeAttribute('data-saving');
         }
     }
 
@@ -1069,8 +994,7 @@ class GradesManager {
             'participation': 'Participación',
             'attendance': 'Asistencia',
             'quiz': 'Quiz',
-            'lab': 'Laboratorio',
-            'internship': 'Práctica Profesional'
+            'lab': 'Laboratorio'
         };
         return typeMap[type] || type;
     }
@@ -1082,15 +1006,6 @@ class GradesManager {
             'failed': 'Reprobado'
         };
         return statusMap[status] || status;
-    }
-
-    getWeightInfo(studentGrades) {
-        const totalWeight = studentGrades.reduce((sum, grade) => {
-            const evaluation = this.evaluations[grade.evaluationId];
-            return sum + (evaluation ? evaluation.weight : 0);
-        }, 0);
-        
-        return `${totalWeight}% evaluado`;
     }
 
     getAverageClass(average) {
