@@ -20,8 +20,8 @@ class GroupsManager {
 
     async init() {
         try {
-            await this.loadGroups();
-            await this.loadData();
+            await this.loadData(); // Cargar estudiantes primero
+            await this.loadGroups(); // Luego cargar grupos
         } catch (error) {
             console.warn('Error al inicializar GroupsManager:', error);
         }
@@ -108,6 +108,8 @@ class GroupsManager {
             const studentsSnapshot = await get(studentsRef);
             if (studentsSnapshot.exists()) {
                 this.students = studentsSnapshot.val();
+            } else {
+                this.students = {};
             }
 
             // Ya no necesitamos cargar cursos, usamos niveles académicos fijos
@@ -119,7 +121,6 @@ class GroupsManager {
             }
         }
     }
-
 
     applyFilters() {
         const academicLevelFilter = document.getElementById('groupAcademicLevelFilter')?.value || '';
@@ -163,14 +164,17 @@ class GroupsManager {
 
         tbody.innerHTML = Object.entries(groupsToShow)
             .sort(([,a], [,b]) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-            .map(([id, group]) => `
+            .map(([id, group]) => {
+                const studentCount = this.getGroupStudentCount(id, group);
+                
+                return `
                 <tr>
                     <td><strong>${group.groupCode}</strong></td>
                     <td>${group.groupName}</td>
                     <td>${group.academicLevel || group.courseName || 'N/A'}</td>
                     <td><span class="badge ${group.period}">${this.getPeriodText(group.period)}</span></td>
                     <td>${group.year}</td>
-                    <td>${this.getGroupStudentCount(id, group)} estudiantes</td>
+                    <td>${studentCount} estudiantes</td>
                     <td>
                         <span class="status-badge ${group.status}">
                             ${this.getStatusText(group.status)}
@@ -191,7 +195,8 @@ class GroupsManager {
                         </button>
                     </td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
     }
 
     showGroupModal(groupId = null) {
@@ -452,6 +457,7 @@ class GroupsManager {
         } else {
             // Método 2: Buscar estudiantes por campo group
             const groupName = group.groupName || group.groupCode || '';
+            const groupCode = group.groupCode || '';
             
             groupStudents = Object.entries(this.students)
                 .filter(([studentId, student]) => {
@@ -459,7 +465,7 @@ class GroupsManager {
                     
                     const belongsToGroupById = student.group === groupId;
                     const belongsToGroupByName = student.group === groupName;
-                    const belongsToGroupByCode = student.group === group.groupCode;
+                    const belongsToGroupByCode = student.group === groupCode;
                     
                     return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
                 })
@@ -639,12 +645,13 @@ class GroupsManager {
                 .filter(student => student && student.status === 'active');
         } else {
             const groupName = group.groupName || group.groupCode || '';
+            const groupCode = group.groupCode || '';
             groupStudents = Object.entries(this.students)
                 .filter(([studentId, student]) => {
                     if (!student || student.status !== 'active') return false;
                     const belongsToGroupById = student.group === groupId;
                     const belongsToGroupByName = student.group === groupName;
-                    const belongsToGroupByCode = student.group === group.groupCode;
+                    const belongsToGroupByCode = student.group === groupCode;
                     return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
                 })
                 .map(([studentId, student]) => ({ id: studentId, ...student }));
@@ -822,17 +829,18 @@ class GroupsManager {
             return activeStudents.length;
         }
         
-        // Método 2: Buscar estudiantes por campo group (mismo método que asistencia)
+        // Método 2: Buscar estudiantes por campo group
         const groupName = group.groupName || group.groupCode || '';
+        const groupCode = group.groupCode || '';
         
-        const studentsInGroup = Object.values(this.students || {})
-            .filter(student => {
+        const studentsInGroup = Object.entries(this.students || {})
+            .filter(([studentId, student]) => {
                 if (!student || student.status !== 'active') return false;
                 
                 // Comparar con el ID del grupo, nombre del grupo, o código del grupo
                 const belongsToGroupById = student.group === groupId;
                 const belongsToGroupByName = student.group === groupName;
-                const belongsToGroupByCode = student.group === group.groupCode;
+                const belongsToGroupByCode = student.group === groupCode;
                 
                 return belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
             });
