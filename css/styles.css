@@ -2786,3 +2786,450 @@ a[data-section="cronograma"] {
     }
 }
 
+/* ============= ESTILOS PARA TABLA DE ASISTENCIA ============= */
+
+.attendance-table-container {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.attendance-table {
+    min-width: 1200px;
+    font-size: 0.875rem;
+}
+
+.attendance-table th {
+    background: var(--primary-blue);
+    color: white;
+    font-weight: 600;
+    text-align: center;
+    padding: 12px 8px;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.attendance-table td {
+    padding: 8px;
+    text-align: center;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.attendance-table .date-column-header {
+    background: var(--secondary-blue) !important;
+    min-width: 80px;
+}
+
+.attendance-table .attendance-date-cell {
+    padding: 4px;
+}
+
+.attendance-table .attendance-status-select {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    text-align: center;
+    background: white;
+}
+
+.attendance-table .attendance-status-select:disabled {
+    background: #f8f9fa;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+    border-color: #e9ecef;
+}
+
+.attendance-table .attendance-status-select option[value="P"] {
+    color: #16a34a;
+    font-weight: bold;
+}
+
+.attendance-table .attendance-status-select option[value="A"] {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+.attendance-table .attendance-status-select option[value="T"] {
+    color: #f59e0b;
+    font-weight: bold;
+}
+
+.attendance-table .attendance-status-select option[value="CONGELADO"] {
+    color: #3b82f6;
+    font-weight: bold;
+}
+
+.attendance-table .final-grade-input {
+    width: 60px;
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+.attendance-table .student-status-select {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    text-align: center;
+    background: white;
+}
+
+.attendance-table .student-status-select option[value="ACTIVO"] {
+    color: #16a34a;
+    font-weight: bold;
+}
+
+.attendance-table .student-status-select option[value="CONGELADO"] {
+    color: #3b82f6;
+    font-weight: bold;
+}
+
+.attendance-table .student-status-select option[value="GRADUADO"] {
+    color: #7c3aed;
+    font-weight: bold;
+}
+
+.attendance-table .student-status-select option[value="ABANDONO"] {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+/* Student info column styling */
+.attendance-table td:nth-child(3) {
+    text-align: left;
+    min-width: 200px;
+}
+
+.attendance-table td:nth-child(4),
+.attendance-table td:nth-child(5),
+.attendance-table td:nth-child(6) {
+    text-align: left;
+    min-width: 120px;
+}
+
+/* Course, teacher, schedule columns */
+.attendance-table td:nth-last-child(4),
+.attendance-table td:nth-last-child(3),
+.attendance-table td:nth-last-child(2) {
+    text-align: left;
+    min-width: 150px;
+}
+
+/* Responsive attendance table */
+@media (max-width: 768px) {
+    .attendance-table {
+        font-size: 0.75rem;
+    }
+    
+    .attendance-table th,
+    .attendance-table td {
+        padding: 6px 4px;
+    }
+}
+
+/* ============= ESTILOS PARA CALENDARIO DE FECHAS ============= */
+
+.attendance-calendar-section {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin: 20px 0;
+    border: 1px solid #e0e0e0;
+}
+
+.calendar-header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    border-radius: 8px 8px 0 0;
+}
+
+.calendar-header-section h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.calendar-controls {
+    display: flex;
+    gap: 10px;
+}
+
+/* Estilos específicos para el calendario de asistencia */
+.attendance-calendar-container {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 12px;
+    padding: 12px;
+    min-height: 250px;
+}
+
+.attendance-calendar-wrapper {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+}
+
+.attendance-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.attendance-calendar-header span {
+    font-size: 12px;
+    font-weight: 500;
+    color: #333;
+}
+
+.attendance-calendar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.attendance-nav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: #666;
+    font-size: 10px;
+    transition: color 0.2s ease;
+}
+
+.attendance-nav-btn:hover {
+    color: #333;
+}
+
+.attendance-calendar-grid {
+    padding: 8px 10px;
+}
+
+.attendance-calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+    margin-bottom: 8px;
+}
+
+.attendance-calendar-weekdays div {
+    text-align: center;
+    font-weight: 500;
+    color: #666;
+    padding: 4px 2px;
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.attendance-calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+}
+
+.attendance-calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 400;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    background: white;
+    color: #333;
+    position: relative;
+    min-height: 25px;
+}
+
+.attendance-calendar-day:hover {
+    background: #f5f5f5;
+}
+
+.attendance-calendar-day.selected {
+    background: #1976d2;
+    color: white;
+    border: 1px solid #000;
+    font-weight: 500;
+}
+
+.attendance-calendar-day.today {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.attendance-calendar-day.today.selected {
+    background: #1976d2;
+    color: white;
+    border: 1px solid #000;
+}
+
+.attendance-calendar-day.prev-month,
+.attendance-calendar-day.next-month {
+    color: #ccc;
+    background: white;
+    cursor: default;
+}
+
+.attendance-calendar-day.prev-month:hover,
+.attendance-calendar-day.next-month:hover {
+    background: white;
+}
+
+.calendar-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+}
+
+.btn-clear,
+.btn-today {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: #666;
+    transition: color 0.2s ease;
+}
+
+.btn-clear:hover,
+.btn-today:hover {
+    color: #333;
+}
+
+.selected-dates-panel {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+}
+
+.selected-dates-panel h4 {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.selected-dates {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+}
+
+.selected-dates h5 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.selected-dates-list {
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.selected-date-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.selected-date-item span {
+    font-weight: 500;
+    color: #333;
+    font-size: 14px;
+}
+
+.selected-date-item .btn-sm {
+    padding: 4px 6px;
+    font-size: 12px;
+}
+
+.selected-date-item.locked {
+    background: #e8f5e8;
+    border-color: #28a745;
+    opacity: 0.8;
+}
+
+.selected-date-item.locked span {
+    color: #155724;
+    font-weight: 500;
+}
+
+/* Responsive calendar */
+@media (max-width: 768px) {
+    .attendance-calendar-section {
+        margin: 15px 0;
+    }
+    
+    .calendar-header-section {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+    
+    .attendance-calendar-container {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 10px;
+    }
+    
+    .date-picker-container {
+        grid-template-columns: 1fr;
+        gap: 15px;
+        padding: 15px;
+    }
+    
+    .attendance-calendar-header {
+        padding: 8px 10px;
+    }
+    
+    .attendance-calendar-grid {
+        padding: 6px 8px;
+    }
+    
+    .attendance-calendar-day {
+        font-size: 9px;
+    }
+    
+    .selected-dates-panel,
+    .selected-dates {
+        padding: 15px;
+    }
+}
+
