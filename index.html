@@ -322,8 +322,31 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="attendanceDate">Fecha *</label>
-                                    <input type="date" id="attendanceDate" required>
+                                    <label for="attendanceCourseFilter">Materia *</label>
+                                    <select id="attendanceCourseFilter" required>
+                                        <option value="">Seleccionar materia</option>
+                                        <option value="ATV-001 Anatomía y Fisiología">ATV-001 Anatomía y Fisiología</option>
+                                        <option value="ATV-002 Patología Veterinaria">ATV-002 Patología Veterinaria</option>
+                                        <option value="ATV-003 Farmacología">ATV-003 Farmacología</option>
+                                        <option value="ATV-004 Cirugía Veterinaria">ATV-004 Cirugía Veterinaria</option>
+                                        <option value="ATV-005 Terminología y Ética profesional">ATV-005 Terminología y Ética profesional</option>
+                                        <option value="ATV-006 Nutrición Animal">ATV-006 Nutrición Animal</option>
+                                        <option value="ATV-007 Reproducción Animal">ATV-007 Reproducción Animal</option>
+                                        <option value="ATV-008 Medicina Preventiva">ATV-008 Medicina Preventiva</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="attendanceTeacherFilter">Profesor *</label>
+                                    <select id="attendanceTeacherFilter" required>
+                                        <option value="">Seleccionar profesor</option>
+                                        <option value="Randall Azofeifa">Randall Azofeifa</option>
+                                        <option value="Javier Artavia">Javier Artavia</option>
+                                        <option value="Abel Castro">Abel Castro</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="attendanceSchedule">Horario *</label>
+                                    <input type="text" id="attendanceSchedule" placeholder="Ej: Lunes - Martes 6pm - 10pm" required>
                                 </div>
                                 <div class="form-group">
                                     <button id="saveAttendanceBtn" class="btn-primary" style="display: none;">
@@ -333,18 +356,60 @@
                             </div>
                         </div>
 
+                        <!-- Calendar Section -->
+                        <div class="attendance-calendar-section">
+                            <div class="calendar-header-section">
+                                <h3>Seleccionar Fechas de Asistencia</h3>
+                                <div class="calendar-controls">
+                                    <button id="clearAllDates" class="btn-clear">Borrar</button>
+                                    <button id="selectToday" class="btn-today">Hoy</button>
+                                </div>
+                            </div>
+                            
+                            <div class="attendance-calendar-container">
+                                <div class="attendance-calendar-wrapper">
+                                    <div class="attendance-calendar-header">
+                                        <span id="attendanceCurrentMonthYear">septiembre de 2025</span>
+                                        <div class="attendance-calendar-nav">
+                                            <button id="attendancePrevMonth" class="attendance-nav-btn">
+                                                <i class="fas fa-chevron-up"></i>
+                                            </button>
+                                            <button id="attendanceNextMonth" class="attendance-nav-btn">
+                                                <i class="fas fa-chevron-down"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="attendanceCalendarGrid" class="attendance-calendar-grid">
+                                        <!-- El calendario se generará dinámicamente -->
+                                    </div>
+                                </div>
+                                
+                                <div class="selected-dates-panel">
+                                    <h4>Fechas seleccionadas:</h4>
+                                    <div id="selectedDatesList" class="selected-dates-list">
+                                        <!-- Las fechas seleccionadas aparecerán aquí -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Attendance Table with Students -->
-                        <div class="table-container">
-                            <table id="attendanceTable" class="data-table">
+                        <div class="table-container attendance-table-container">
+                            <table id="attendanceTable" class="data-table attendance-table">
                                 <thead>
                                     <tr>
-                                        <th>Estudiante</th>
-                                        <th>Curso</th>
                                         <th>Grupo</th>
-                                        <th>Fecha</th>
+                                        <th>Fecha de inicio</th>
+                                        <th>Nombre del estudiante</th>
+                                        <th>Identificación</th>
+                                        <th>Teléfono</th>
+                                        <th>Correo electrónico</th>
+                                        <!-- Las columnas de fechas se agregarán dinámicamente -->
+                                        <th>Materia</th>
+                                        <th>Profesor</th>
+                                        <th>Horario</th>
+                                        <th>Nota final</th>
                                         <th>Estado</th>
-                                        <th>Observaciones</th>
-                                        <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -361,8 +426,11 @@
                             </button>
                         </div>
                         <div class="filters">
-                            <select id="groupCourseFilter">
-                                <option value="">Todos los cursos</option>
+                            <select id="groupAcademicLevelFilter">
+                                <option value="">Todos los niveles académicos</option>
+                                <option value="Asistente Técnico Veterinario">Asistente Técnico Veterinario</option>
+                                <option value="Diplomado">Diplomado</option>
+                                <option value="Curso Libre">Curso Libre</option>
                             </select>
                             <select id="groupPeriodFilter">
                                 <option value="">Todos los períodos</option>
@@ -379,7 +447,7 @@
                                     <tr>
                                         <th>Código</th>
                                         <th>Nombre</th>
-                                        <th>Curso</th>
+                                        <th>Nivel Académico</th>
                                         <th>Período</th>
                                         <th>Año</th>
                                         <th>Estudiantes</th>
