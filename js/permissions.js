@@ -1,15 +1,15 @@
 // Configuración de permisos por rol
 export const PERMISSIONS = {
     admin: {
-        sections: ['dashboard', 'courses', 'students', 'groups', 'payments', 'attendance', 'academic-history', 'reports', 'users'],
+        sections: ['dashboard', 'courses', 'students', 'groups', 'payments', 'attendance', 'academic-history', 'grades', 'reports', 'users'],
         actions: ['create', 'read', 'update', 'delete', 'export', 'manage_users']
     },
     recepcion: {
-        sections: ['dashboard', 'courses', 'students', 'groups', 'payments', 'attendance', 'academic-history'],
+        sections: ['dashboard', 'courses', 'students', 'groups', 'payments', 'attendance', 'academic-history', 'grades'],
         actions: ['create', 'read', 'update', 'delete', 'export']
     },
     user: {
-        sections: ['dashboard', 'students', 'payments', 'attendance'],
+        sections: ['dashboard', 'students', 'payments', 'attendance', 'grades'],
         actions: ['read']
     }
 };

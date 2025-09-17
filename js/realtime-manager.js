@@ -229,3 +229,4 @@ const realtimeManager = new RealtimeManager();
 
 // Exportar para uso en otros módulos
 export { realtimeManager, RealtimeManager };
+
