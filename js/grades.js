@@ -33,10 +33,13 @@ class GradesManager {
         // Botón para agregar nueva evaluación
         const addEvaluationBtn = document.getElementById('addEvaluationBtn');
         if (addEvaluationBtn) {
-            addEvaluationBtn.addEventListener('click', () => {
+            // Remover listeners existentes para evitar duplicación
+            addEvaluationBtn.removeEventListener('click', this.handleAddEvaluationClick);
+            this.handleAddEvaluationClick = () => {
                 console.log('Botón Nueva Evaluación clickeado');
                 this.showEvaluationModal();
-            });
+            };
+            addEvaluationBtn.addEventListener('click', this.handleAddEvaluationClick);
         } else {
             console.error('Botón addEvaluationBtn no encontrado en el DOM');
         }
@@ -44,16 +47,22 @@ class GradesManager {
         // Filtros
         const groupFilter = document.getElementById('gradesGroupFilter');
         if (groupFilter) {
-            groupFilter.addEventListener('change', () => {
+            // Remover listeners existentes para evitar duplicación
+            groupFilter.removeEventListener('change', this.handleGroupFilterChange);
+            this.handleGroupFilterChange = () => {
                 this.applyFilters();
-            });
+            };
+            groupFilter.addEventListener('change', this.handleGroupFilterChange);
         }
 
         const evaluationFilter = document.getElementById('evaluationFilter');
         if (evaluationFilter) {
-            evaluationFilter.addEventListener('change', () => {
+            // Remover listeners existentes para evitar duplicación
+            evaluationFilter.removeEventListener('change', this.handleEvaluationFilterChange);
+            this.handleEvaluationFilterChange = () => {
                 this.applyFilters();
-            });
+            };
+            evaluationFilter.addEventListener('change', this.handleEvaluationFilterChange);
         }
 
         // Configurar actualización en tiempo real
@@ -225,9 +234,20 @@ class GradesManager {
                 ${evaluations.map(evaluation => `
                     <th>
                         <div class="evaluation-header">
-                            <div class="eval-type">${this.getEvaluationTypeText(evaluation.type)}</div>
-                            <div class="eval-date">${this.formatDate(evaluation.date)}</div>
-                            <div class="eval-weight">${evaluation.weight}%</div>
+                            <div class="eval-info">
+                                <div class="eval-type">${this.getEvaluationTypeText(evaluation.type)}</div>
+                                <div class="eval-date">${this.formatDate(evaluation.date)}</div>
+                                <div class="eval-weight">${evaluation.weight}%</div>
+                            </div>
+                            <div class="eval-actions">
+                                <button 
+                                    class="btn-danger btn-sm" 
+                                    onclick="window.gradesManager.deleteEvaluation('${evaluation.id}')"
+                                    title="Eliminar evaluación"
+                                >
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </div>
                     </th>
                 `).join('')}
@@ -472,6 +492,12 @@ class GradesManager {
         const form = document.getElementById('evaluationForm');
         if (!form) return;
 
+        // Prevenir múltiples envíos
+        if (form.dataset.saving === 'true') {
+            console.log('Ya se está guardando una evaluación, ignorando envío duplicado');
+            return;
+        }
+
         const evaluationData = {
             title: document.getElementById('evaluationTitle').value.trim(),
             type: document.getElementById('evaluationType').value,
@@ -501,6 +527,9 @@ class GradesManager {
         }
 
         try {
+            // Marcar formulario como guardando
+            form.dataset.saving = 'true';
+            
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
@@ -510,6 +539,22 @@ class GradesManager {
                 const evaluationRef = ref(db, `evaluations/${evaluationId}`);
                 await set(evaluationRef, evaluationData);
             } else {
+                // Verificar si ya existe una evaluación similar para evitar duplicados
+                const existingEvaluations = Object.values(this.evaluations);
+                const duplicate = existingEvaluations.find(evaluation => 
+                    evaluation.title === evaluationData.title && 
+                    evaluation.groupId === evaluationData.groupId && 
+                    evaluation.type === evaluationData.type &&
+                    evaluation.date === evaluationData.date
+                );
+
+                if (duplicate) {
+                    if (window.app) {
+                        window.app.showNotification('Ya existe una evaluación con el mismo título, tipo y fecha para este grupo', 'warning');
+                    }
+                    return;
+                }
+
                 // Crear nueva evaluación
                 evaluationData.createdAt = new Date().toISOString();
                 const evaluationsRef = ref(db, 'evaluations');
@@ -534,6 +579,9 @@ class GradesManager {
                 window.app.showNotification('Error al guardar la evaluación', 'error');
             }
         } finally {
+            // Limpiar flag de guardando
+            form.dataset.saving = 'false';
+            
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) {
                 submitBtn.disabled = false;
@@ -1025,33 +1073,84 @@ class GradesManager {
     formatDate(date) {
         return new Intl.DateTimeFormat('es-ES').format(new Date(date));
     }
-}
 
-// Crear instancia global
-document.addEventListener('DOMContentLoaded', () => {
-    const gradesTable = document.getElementById('gradesTable');
-    
-    if (gradesTable) {
+    async deleteEvaluation(evaluationId) {
+        const evaluation = this.evaluations[evaluationId];
+        if (!evaluation) {
+            console.error('Evaluación no encontrada:', evaluationId);
+            return;
+        }
+
+        // Mostrar confirmación
+        const confirmed = confirm(
+            `¿Está seguro de que desea eliminar la evaluación "${evaluation.title}"?\n\n` +
+            `Tipo: ${this.getEvaluationTypeText(evaluation.type)}\n` +
+            `Fecha: ${this.formatDate(evaluation.date)}\n` +
+            `Peso: ${evaluation.weight}%\n\n` +
+            `Esta acción también eliminará todas las notas asociadas a esta evaluación y no se puede deshacer.`
+        );
+
+        if (!confirmed) return;
+
         try {
-            window.gradesManager = new GradesManager();
+            // Mostrar indicador de carga
+            if (window.app) {
+                window.app.showNotification('Eliminando evaluación...', 'info');
+            }
+
+            // Eliminar todas las notas asociadas a esta evaluación
+            const gradesToDelete = Object.entries(this.grades)
+                .filter(([id, grade]) => grade.evaluationId === evaluationId);
+
+            console.log(`Eliminando ${gradesToDelete.length} notas asociadas a la evaluación`);
+
+            for (const [gradeId, grade] of gradesToDelete) {
+                const gradeRef = ref(db, `grades/${gradeId}`);
+                await remove(gradeRef);
+            }
+
+            // Eliminar la evaluación
+            const evaluationRef = ref(db, `evaluations/${evaluationId}`);
+            await remove(evaluationRef);
+
+            // Recargar datos para actualizar la vista
+            await this.loadAllData();
+
+            if (window.app) {
+                window.app.showNotification(
+                    `Evaluación "${evaluation.title}" eliminada exitosamente`, 
+                    'success'
+                );
+            }
+
         } catch (error) {
-            console.error('GradesManager: Error al crear instancia:', error);
+            console.error('Error al eliminar evaluación:', error);
+            if (window.app) {
+                window.app.showNotification('Error al eliminar la evaluación', 'error');
+            }
         }
     }
-});
+}
 
-// También intentar crear la instancia inmediatamente si el DOM ya está listo
-if (document.readyState === 'loading') {
-    // Esperar DOMContentLoaded
-} else {
-    const gradesTable = document.getElementById('gradesTable');
-    
-    if (gradesTable) {
-        try {
-            window.gradesManager = new GradesManager();
-        } catch (error) {
-            console.error('GradesManager: Error al crear instancia inmediatamente:', error);
+// Crear instancia global - evitar duplicación
+if (!window.gradesManager) {
+    const initializeGradesManager = () => {
+        const gradesTable = document.getElementById('gradesTable');
+        
+        if (gradesTable && !window.gradesManager) {
+            try {
+                window.gradesManager = new GradesManager();
+                console.log('GradesManager inicializado correctamente');
+            } catch (error) {
+                console.error('GradesManager: Error al crear instancia:', error);
+            }
         }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeGradesManager);
+    } else {
+        initializeGradesManager();
     }
 }
 

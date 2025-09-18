@@ -231,9 +231,13 @@ class AttendanceManager {
         const currentYear = new Date().getFullYear();
         const fullDate = `${currentYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         
-        // Buscar si hay registros de asistencia para esta fecha
+        // Obtener el teacherId del usuario actual
+        const currentTeacherId = this.getCurrentTeacherId();
+        
+        // Buscar si hay registros de asistencia para esta fecha y este profesor
         return Object.values(this.attendance).some(record => 
-            record.date === fullDate || record.displayDate === dateStr
+            (record.date === fullDate || record.displayDate === dateStr) &&
+            record.teacherId === currentTeacherId
         );
     }
 
@@ -243,13 +247,34 @@ class AttendanceManager {
         const currentYear = new Date().getFullYear();
         const fullDate = `${currentYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         
-        // Buscar el registro de asistencia para este estudiante y fecha
+        // Obtener el teacherId del usuario actual
+        const currentTeacherId = this.getCurrentTeacherId();
+        
+        // Buscar el registro de asistencia para este estudiante, fecha y profesor
         const record = Object.values(this.attendance).find(att => 
             att.studentId === studentId && 
-            (att.date === fullDate || att.displayDate === dateStr)
+            (att.date === fullDate || att.displayDate === dateStr) &&
+            att.teacherId === currentTeacherId
         );
         
         return record ? record.status : null;
+    }
+
+    getCurrentTeacherId() {
+        // Obtener el ID del profesor actual
+        if (window.currentUser && window.currentUser.id) {
+            return window.currentUser.id;
+        }
+        
+        // Fallback: verificar si existe una función de autenticación
+        if (window.auth && window.auth.getCurrentUserId) {
+            return window.auth.getCurrentUserId();
+        }
+        
+        // Si no se puede obtener el ID del usuario, usar un valor por defecto
+        // Esto debería ser manejado por el sistema de autenticación
+        console.warn('No se pudo obtener el ID del profesor actual');
+        return 'unknown_teacher';
     }
 
     isCurrentUserAdmin() {
@@ -725,24 +750,26 @@ class AttendanceManager {
                     studentId: student.id,
                     studentName: `${student.firstName} ${student.lastName}`,
                     course: course,
-                        teacher: teacher,
-                        schedule: schedule,
+                    teacher: teacher,
+                    teacherId: this.getCurrentTeacherId(), // Agregar ID del profesor actual
+                    schedule: schedule,
                     date: fullDate,
                     displayDate: date, // Mantener formato DD-MM para mostrar
                     status: status,
-                        finalGrade: finalGrade,
-                        studentStatus: studentStatus,
+                    finalGrade: finalGrade,
+                    studentStatus: studentStatus,
                     group: group,
                     week: weekNumber,
                     year: currentYear,
                     updatedAt: new Date().toISOString()
                 };
 
-                    // Verificar si ya existe un registro para esta fecha y estudiante
+                    // Verificar si ya existe un registro para esta fecha, estudiante y profesor
                     const existingRecord = Object.entries(this.attendance).find(([id, record]) => 
                         record.studentId === student.id && 
                         record.date === fullDate && 
-                        record.group === group
+                        record.group === group &&
+                        record.teacherId === this.getCurrentTeacherId()
                     );
 
                     if (existingRecord) {
@@ -798,7 +825,10 @@ class AttendanceManager {
         }
 
         // Calcular estadísticas del estudiante
-        const studentAttendance = Object.values(this.attendance).filter(record => record.studentId === studentId);
+        const currentTeacherId = this.getCurrentTeacherId();
+        const studentAttendance = Object.values(this.attendance).filter(record => 
+            record.studentId === studentId && record.teacherId === currentTeacherId
+        );
         const totalClasses = studentAttendance.length;
         const presentClasses = studentAttendance.filter(r => r.status === 'present' || r.status === 'late').length;
         const attendancePercentage = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : 100;
@@ -957,10 +987,12 @@ class AttendanceManager {
 
     // Obtener estadísticas de asistencia
     getAttendanceStats(studentId, month = null) {
+        const currentTeacherId = this.getCurrentTeacherId();
         const studentRecords = Object.values(this.attendance).filter(record => {
             const matchesStudent = record.studentId === studentId;
             const matchesMonth = !month || record.date.startsWith(month);
-            return matchesStudent && matchesMonth;
+            const matchesTeacher = record.teacherId === currentTeacherId;
+            return matchesStudent && matchesMonth && matchesTeacher;
         });
 
         const stats = {
