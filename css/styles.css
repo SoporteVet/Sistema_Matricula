@@ -1880,6 +1880,35 @@ a[data-section="cronograma"] {
 .evaluation-header {
     text-align: center;
     font-size: 12px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    min-width: 120px;
+}
+
+.evaluation-header .eval-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+}
+
+.evaluation-header .eval-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.evaluation-header:hover .eval-actions {
+    opacity: 1;
 }
 
 .eval-type {
