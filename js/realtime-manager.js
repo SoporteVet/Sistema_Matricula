@@ -6,11 +6,23 @@ class RealtimeManager {
         this.listeners = new Map();
         this.callbacks = new Map();
         this.isInitialized = false;
+        this.updateCount = 0;
+        this.lastUpdateTime = {};
     }
 
     // Inicializar el sistema de tiempo real
     init() {
-        if (this.isInitialized) return;
+        if (this.isInitialized) {
+            console.log('Sistema de tiempo real ya está inicializado');
+            return;
+        }
+        
+        // Verificar que la base de datos esté disponible
+        if (!db) {
+            console.warn('Base de datos no disponible, reintentando en 1 segundo...');
+            setTimeout(() => this.init(), 1000);
+            return;
+        }
         
         console.log('Inicializando sistema de actualizaciones en tiempo real...');
         
@@ -26,6 +38,13 @@ class RealtimeManager {
         
         this.isInitialized = true;
         console.log('Sistema de actualizaciones en tiempo real inicializado');
+        
+        // Mostrar indicador de que el sistema está activo
+        if (window.app) {
+            setTimeout(() => {
+                window.app.showNotification('Sistema de actualización en tiempo real activo', 'success', 2000);
+            }, 500);
+        }
     }
 
     // Configurar escucha para estudiantes
@@ -155,6 +174,17 @@ class RealtimeManager {
 
     // Notificar a todos los listeners de una entidad
     notifyListeners(entity, data) {
+        // Evitar actualizaciones duplicadas muy rápidas (debounce)
+        const now = Date.now();
+        const lastUpdate = this.lastUpdateTime[entity] || 0;
+        if (now - lastUpdate < 100) {
+            return; // Ignorar actualizaciones muy rápidas
+        }
+        this.lastUpdateTime[entity] = now;
+        
+        // Mostrar indicador visual de actualización
+        this.showUpdateFlash(entity);
+        
         if (this.callbacks.has(entity)) {
             this.callbacks.get(entity).forEach(callback => {
                 try {
@@ -164,6 +194,81 @@ class RealtimeManager {
                 }
             });
         }
+    }
+    
+    // Mostrar efecto flash cuando hay actualizaciones
+    showUpdateFlash(entity) {
+        this.updateCount++;
+        
+        // Mapear entidades a nombres amigables
+        const entityNames = {
+            'students': 'Estudiantes',
+            'courses': 'Cursos',
+            'payments': 'Pagos',
+            'attendance': 'Asistencia',
+            'groups': 'Grupos',
+            'users': 'Usuarios',
+            'academicHistory': 'Historial Académico',
+            'reports': 'Reportes'
+        };
+        
+        const entityName = entityNames[entity] || entity;
+        
+        // Agregar clase flash a la tabla correspondiente
+        const tableMap = {
+            'students': '#studentsTable',
+            'courses': '#coursesTable',
+            'payments': '#paymentsTable',
+            'attendance': '#attendanceTable',
+            'groups': '#groupsTable',
+            'users': '#usersTable',
+            'academicHistory': '#academicHistoryTable',
+            'reports': '#reportsTable'
+        };
+        
+        const tableSelector = tableMap[entity];
+        if (tableSelector) {
+            const table = document.querySelector(tableSelector);
+            if (table) {
+                // Agregar clase flash
+                table.classList.add('data-updated');
+                
+                // Remover después de la animación
+                setTimeout(() => {
+                    table.classList.remove('data-updated');
+                }, 1000);
+            }
+        }
+        
+        // Mostrar indicador discreto de actualización
+        this.showUpdateIndicator(entityName);
+    }
+    
+    // Mostrar indicador visual discreto de actualización
+    showUpdateIndicator(entityName) {
+        // Obtener o crear el indicador
+        let indicator = document.getElementById('realtime-update-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'realtime-update-indicator';
+            indicator.className = 'realtime-update-indicator';
+            indicator.innerHTML = '<i class="fas fa-sync-alt"></i> <span>Actualizando...</span>';
+            document.body.appendChild(indicator);
+        }
+        
+        // Actualizar texto
+        const span = indicator.querySelector('span');
+        if (span) {
+            span.textContent = `${entityName} actualizado`;
+        }
+        
+        // Mostrar indicador
+        indicator.classList.add('show');
+        
+        // Ocultar después de 2 segundos
+        setTimeout(() => {
+            indicator.classList.remove('show');
+        }, 2000);
     }
 
     // Obtener datos en tiempo real de una entidad específica

@@ -67,6 +67,7 @@ class StudentsManager {
         // Suscribirse a actualizaciones en tiempo real de estudiantes
         this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
             this.students = students;
+            // Recargar automáticamente la tabla
             this.applyFilters();
         });
         
@@ -80,6 +81,10 @@ class StudentsManager {
         this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
             this.groups = groups;
             this.updateGroupOptions();
+            // Si estamos en la sección de estudiantes, recargar filtros
+            if (document.getElementById('studentsTable')) {
+                this.applyFilters();
+            }
         });
     }
 
@@ -391,15 +396,12 @@ class StudentsManager {
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
-                        <label for="studentCedula">Cédula *</label>
+                        <label for="studentCedula">Cédula</label>
                         <input 
                             type="text" 
                             id="studentCedula" 
                             value="${student?.cedula || ''}" 
-                            required
                             placeholder="Ej: 123456789"
-                            pattern="[0-9]{9,12}"
-                            title="La cédula debe tener entre 9 y 12 dígitos numéricos"
                         >
                     </div>
                     
@@ -670,14 +672,13 @@ class StudentsManager {
         }
 
         // Validaciones
-        if (!studentData.studentId || !studentData.group || !studentData.cedula || !studentData.firstName || !studentData.lastName || 
+        if (!studentData.studentId || !studentData.group || !studentData.firstName || !studentData.lastName || 
             !studentData.email || !studentData.course || !studentData.enrollmentDate) {
             if (window.app) {
                 // Mostrar qué campos están vacíos para debugging
                 const emptyFields = [];
                 if (!studentData.studentId) emptyFields.push('ID del Estudiante');
                 if (!studentData.group) emptyFields.push('Número de Grupo');
-                if (!studentData.cedula) emptyFields.push('Cédula');
                 if (!studentData.firstName) emptyFields.push('Nombre');
                 if (!studentData.lastName) emptyFields.push('Apellidos');
                 if (!studentData.email) emptyFields.push('Email');
@@ -709,14 +710,6 @@ class StudentsManager {
             return;
         }
 
-        // Validar cédula (debe tener entre 9 y 12 dígitos)
-        if (!/^\d{9,12}$/.test(studentData.cedula)) {
-            if (window.app) {
-                window.app.showNotification('La cédula debe tener entre 9 y 12 dígitos numéricos', 'error');
-            }
-            return;
-        }
-
         // Validar email
         if (!this.validateEmail(studentData.email)) {
             if (window.app) {
@@ -737,16 +730,18 @@ class StudentsManager {
             return;
         }
 
-        // Verificar que la cédula no esté duplicada
-        const isCedulaDuplicate = Object.entries(this.students).some(([id, student]) => 
-            student.cedula === studentData.cedula && id !== studentId
-        );
+        // Verificar que la cédula no esté duplicada solo si se proporciona
+        if (studentData.cedula) {
+            const isCedulaDuplicate = Object.entries(this.students).some(([id, student]) => 
+                student.cedula && student.cedula === studentData.cedula && id !== studentId
+            );
 
-        if (isCedulaDuplicate) {
-            if (window.app) {
-                window.app.showNotification('La cédula ya está registrada para otro estudiante', 'error');
+            if (isCedulaDuplicate) {
+                if (window.app) {
+                    window.app.showNotification('La cédula ya está registrada para otro estudiante', 'error');
+                }
+                return;
             }
-            return;
         }
 
         // Validar teléfono principal (debe tener 8 dígitos, permitiendo espacios o guiones)

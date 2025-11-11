@@ -3262,3 +3262,88 @@ a[data-section="cronograma"] {
     }
 }
 
+/* Efecto flash para actualizaciones en tiempo real */
+.data-table.data-updated {
+    animation: dataUpdateFlash 1s ease-in-out;
+    position: relative;
+}
+
+.data-table.data-updated::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(59, 130, 246, 0.1) 50%,
+        transparent 100%
+    );
+    animation: shimmer 1s ease-in-out;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes dataUpdateFlash {
+    0% {
+        background-color: rgba(255, 255, 255, 0.9);
+    }
+    50% {
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+    100% {
+        background-color: rgba(255, 255, 255, 0.9);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Indicador de actualización en tiempo real */
+.realtime-update-indicator {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: rgba(59, 130, 246, 0.9);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.realtime-update-indicator.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.realtime-update-indicator i {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+

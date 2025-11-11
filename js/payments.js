@@ -51,6 +51,13 @@ class PaymentsManager {
         }
 
         // Filtros
+        const paymentGroupFilter = document.getElementById('paymentGroupFilter');
+        if (paymentGroupFilter) {
+            paymentGroupFilter.addEventListener('change', () => {
+                this.applyFilters();
+            });
+        }
+
         const paymentCourseFilter = document.getElementById('paymentCourseFilter');
         if (paymentCourseFilter) {
             paymentCourseFilter.addEventListener('change', () => {
@@ -161,6 +168,7 @@ class PaymentsManager {
             const studentsSnapshot = await get(studentsRef);
             if (studentsSnapshot.exists()) {
                 this.students = studentsSnapshot.val();
+                this.updatePaymentGroupFilter();
             }
 
             // Cargar cursos
@@ -176,6 +184,7 @@ class PaymentsManager {
             const groupsSnapshot = await get(groupsRef);
             if (groupsSnapshot.exists()) {
                 this.groups = groupsSnapshot.val();
+                this.updatePaymentGroupFilter();
                 this.updateGiraGroupFilter();
             }
         } catch (error) {
@@ -201,18 +210,79 @@ class PaymentsManager {
         }
     }
 
+    updatePaymentGroupFilter() {
+        const paymentGroupFilter = document.getElementById('paymentGroupFilter');
+        
+        if (!paymentGroupFilter) return;
+
+        const groupValues = new Set();
+
+        Object.values(this.students || {}).forEach(student => {
+            if (student.status === 'active' && student.group) {
+                groupValues.add(student.group);
+            }
+        });
+
+        const resolveGroupLabel = (groupValue) => {
+            if (!groupValue) return 'Sin grupo';
+
+            const groupEntry = Object.entries(this.groups || {}).find(([id, group]) => 
+                id === groupValue ||
+                group.groupCode === groupValue ||
+                group.groupName === groupValue
+            );
+
+            if (groupEntry) {
+                const [, group] = groupEntry;
+                const name = group.groupName || group.groupCode || groupValue;
+                const code = group.groupCode && group.groupCode !== name ? group.groupCode : null;
+                return code ? `${name} (${code})` : name;
+            }
+
+            return groupValue;
+        };
+
+        paymentGroupFilter.innerHTML = '<option value="">Todos los grupos</option>' +
+            Array.from(groupValues).sort().map(groupValue => `
+                <option value="${groupValue}">${resolveGroupLabel(groupValue)}</option>
+            `).join('');
+    }
+
+    getGroupLabel(groupValue) {
+        if (!groupValue) {
+            return '-';
+        }
+
+        const groupEntry = Object.entries(this.groups || {}).find(([id, group]) =>
+            id === groupValue ||
+            group.groupCode === groupValue ||
+            group.groupName === groupValue
+        );
+
+        if (groupEntry) {
+            const [, group] = groupEntry;
+            const name = group.groupName || group.groupCode || groupValue;
+            const code = group.groupCode && group.groupCode !== name ? group.groupCode : null;
+            return code ? `${name} (${code})` : name;
+        }
+
+        return groupValue;
+    }
+
     applyFilters() {
+        const groupFilter = document.getElementById('paymentGroupFilter')?.value || '';
         const courseFilter = document.getElementById('paymentCourseFilter')?.value || '';
         const statusFilter = document.getElementById('paymentStatusFilter')?.value || '';
         const monthFilter = document.getElementById('paymentMonthFilter')?.value || '';
 
         this.filteredPayments = Object.fromEntries(
             Object.entries(this.payments).filter(([id, payment]) => {
+                const matchesGroup = !groupFilter || payment.group === groupFilter;
                 const matchesCourse = !courseFilter || payment.course === courseFilter;
                 const matchesStatus = !statusFilter || payment.status === statusFilter;
                 const matchesMonth = !monthFilter || payment.month === monthFilter;
                 
-                return matchesCourse && matchesStatus && matchesMonth;
+                return matchesGroup && matchesCourse && matchesStatus && matchesMonth;
             })
         );
 
@@ -245,8 +315,12 @@ class PaymentsManager {
             .sort(([,a], [,b]) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
             .map(([id, payment]) => `
                 <tr>
-                    <td>${payment.studentName}</td>
-                    <td>${payment.course}</td>
+                    <td>
+                        ${payment.studentName}
+                        ${payment.studentCedula ? `<br><small>Cédula: ${payment.studentCedula}</small>` : ''}
+                        ${payment.course ? `<br><small>Curso: ${payment.course}</small>` : ''}
+                    </td>
+                    <td>${this.getGroupLabel(payment.group)}</td>
                     <td>${this.formatMonth(payment.month)}</td>
                     <td>${this.formatCurrency(payment.amount)}</td>
                     <td>
@@ -282,11 +356,17 @@ class PaymentsManager {
             .map(([id, student]) => ({
                 id,
                 name: `${student.firstName} ${student.lastName}`,
-                course: student.course
+                course: student.course,
+                cedula: student.cedula || '',
+                group: student.group || ''
             }));
 
         const activeCourses = Object.values(this.courses)
             .filter(course => course.status === 'active');
+
+        const paymentCedulaValue = payment && payment.studentId && this.students[payment.studentId]
+            ? (this.students[payment.studentId].cedula || '')
+            : (payment?.studentCedula || '');
 
         const modalContent = `
             <div class="modal-header">
@@ -300,13 +380,36 @@ class PaymentsManager {
             </div>
             <form id="paymentForm" class="handled">
                 <div class="form-group">
+                    <label for="paymentStudentCedula">Buscar por cédula</label>
+                    <input 
+                        type="text" 
+                        id="paymentStudentCedula" 
+                        list="paymentCedulaList"
+                        value="${paymentCedulaValue}"
+                        placeholder="Ingrese la cédula del estudiante"
+                        autocomplete="off"
+                    >
+                    <datalist id="paymentCedulaList">
+                        ${activeStudents
+                            .filter(student => student.cedula)
+                            .map(student => `
+                                <option value="${student.cedula}" label="${student.name} - Grupo: ${student.group || 'N/A'} - ${student.course}"></option>
+                            `).join('')}
+                    </datalist>
+                </div>
+
+                <div class="form-group">
                     <label for="paymentStudent">Estudiante *</label>
                     <select id="paymentStudent" required ${isEdit ? 'disabled' : ''}>
                         <option value="">Seleccionar estudiante</option>
                         ${activeStudents.map(student => `
-                            <option value="${student.id}" data-course="${student.course}" 
+                            <option 
+                                value="${student.id}" 
+                                data-course="${student.course}" 
+                                data-cedula="${student.cedula}" 
+                                data-group="${student.group}" 
                                 ${payment?.studentId === student.id ? 'selected' : ''}>
-                                ${student.name} - ${student.course}
+                                ${student.name} - Cédula: ${student.cedula || 'N/A'} - Grupo: ${student.group || 'N/A'} - ${student.course}
                             </option>
                         `).join('')}
                     </select>
@@ -314,14 +417,19 @@ class PaymentsManager {
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
-                        <label for="paymentCourse">Curso *</label>
+                        <label for="paymentCourse">Materia *</label>
                         <input 
                             type="text" 
                             id="paymentCourse" 
                             value="${payment?.course || ''}" 
-                            readonly
-                            placeholder="Se seleccionará automáticamente"
+                            list="paymentCourseList"
+                            placeholder="Seleccione o ingrese la materia"
                         >
+                        <datalist id="paymentCourseList">
+                            ${activeCourses.map(course => `
+                                <option value="${course.name}"></option>
+                            `).join('')}
+                        </datalist>
                     </div>
                     
                     <div class="form-group">
@@ -412,27 +520,116 @@ class PaymentsManager {
         const studentSelect = document.getElementById('paymentStudent');
         const courseInput = document.getElementById('paymentCourse');
         const amountInput = document.getElementById('paymentAmount');
+        const cedulaInput = document.getElementById('paymentStudentCedula');
         const statusSelect = document.getElementById('paymentStatus');
         const paymentDateInput = document.getElementById('paymentDate');
         const form = document.getElementById('paymentForm');
+
+        if (amountInput && amountInput.value) {
+            amountInput.dataset.autoFilled = 'false';
+        }
+
+        if (amountInput) {
+            amountInput.addEventListener('input', () => {
+                amountInput.dataset.autoFilled = 'false';
+            });
+        }
+
+        if (courseInput) {
+            courseInput.addEventListener('input', () => {
+                const courseName = courseInput.value.trim();
+                const course = Object.values(this.courses).find(c => c.name === courseName);
+
+                if (course) {
+                    courseInput.value = course.name;
+
+                    if (amountInput && (!amountInput.value || amountInput.dataset.autoFilled !== 'false')) {
+                        amountInput.value = course.price;
+                        amountInput.dataset.autoFilled = 'true';
+                    }
+                }
+            });
+        }
+
+        const syncCedulaWithStudent = (studentId) => {
+            if (!cedulaInput) return;
+            if (!studentId) {
+                cedulaInput.value = '';
+                return;
+            }
+            let cedulaValue = '';
+            if (studentSelect) {
+                const option = studentSelect.querySelector(`option[value="${studentId}"]`);
+                cedulaValue = option?.dataset?.cedula || '';
+            }
+            if (!cedulaValue) {
+                const studentData = this.students?.[studentId];
+                cedulaValue = studentData?.cedula || '';
+            }
+            if (cedulaValue) {
+                cedulaInput.value = cedulaValue;
+            }
+        };
+
+        const handleCedulaSelection = () => {
+            if (!cedulaInput || !studentSelect) return;
+            const cedulaValue = cedulaInput.value.trim();
+            if (!cedulaValue) return;
+
+            const studentEntry = Object.entries(this.students || {}).find(([id, student]) => 
+                (student.cedula || '').toString() === cedulaValue
+            );
+
+            if (studentEntry) {
+                const [studentId] = studentEntry;
+                if (studentSelect.value !== studentId) {
+                    studentSelect.value = studentId;
+                    studentSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        };
+
+        if (cedulaInput) {
+            cedulaInput.addEventListener('change', handleCedulaSelection);
+            cedulaInput.addEventListener('blur', handleCedulaSelection);
+            cedulaInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleCedulaSelection();
+                }
+            });
+        }
 
         // Actualizar curso y precio cuando se selecciona estudiante
         if (studentSelect) {
             studentSelect.addEventListener('change', () => {
                 const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+                if (!courseInput) {
+                    syncCedulaWithStudent(selectedOption?.value || '');
+                    return;
+                }
+
                 if (selectedOption.value) {
                     const courseName = selectedOption.dataset.course;
                     courseInput.value = courseName;
+                    syncCedulaWithStudent(selectedOption.value);
                     
                     // Buscar precio del curso
                     const course = Object.values(this.courses).find(c => c.name === courseName);
-                    if (course && amountInput.value === '') {
+                    if (course && amountInput && (!amountInput.value || amountInput.dataset.autoFilled !== 'false')) {
                         amountInput.value = course.price;
+                        amountInput.dataset.autoFilled = 'true';
                     }
-                } else {
+                } else if (courseInput) {
                     courseInput.value = '';
+                    syncCedulaWithStudent('');
                 }
             });
+
+            // Sincronizar valor inicial si ya hay un estudiante seleccionado
+            if (studentSelect.value) {
+                syncCedulaWithStudent(studentSelect.value);
+            }
         }
 
         // Manejar cambio de estado
@@ -458,11 +655,30 @@ class PaymentsManager {
         if (!form) return;
 
         const studentSelect = document.getElementById('paymentStudent');
+        const cedulaInput = document.getElementById('paymentStudentCedula');
         const selectedStudent = studentSelect.options[studentSelect.selectedIndex];
+        if (!selectedStudent) {
+            if (window.app) {
+                window.app.showNotification('Seleccione un estudiante válido', 'error');
+            }
+            return;
+        }
+
+        const selectedCedula = selectedStudent.dataset?.cedula || 
+            this.students?.[studentSelect.value]?.cedula || 
+            cedulaInput?.value.trim() || 
+            null;
+
+        const selectedGroup = selectedStudent.dataset?.group || 
+            this.students?.[studentSelect.value]?.group || 
+            (paymentId ? this.payments?.[paymentId]?.group : null) || 
+            null;
         
         const paymentData = {
             studentId: studentSelect.value,
             studentName: selectedStudent.text.split(' - ')[0],
+            studentCedula: selectedCedula,
+            group: selectedGroup,
             course: document.getElementById('paymentCourse').value,
             month: document.getElementById('paymentMonth').value,
             amount: parseFloat(document.getElementById('paymentAmount').value) || 0,
@@ -665,6 +881,8 @@ class PaymentsManager {
                     paymentsToCreate.push({
                         studentId,
                         studentName: `${student.firstName} ${student.lastName}`,
+                        studentCedula: student.cedula || null,
+                        group: student.group || null,
                         course: student.course,
                         month,
                         amount,
