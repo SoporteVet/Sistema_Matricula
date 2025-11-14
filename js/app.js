@@ -243,8 +243,17 @@ class App {
                     break;
                 case 'payments':
                     if (window.paymentsManager) {
+                        // Asegurar que los event listeners estén configurados
+                        if (!window.paymentsManager.listenersSetup) {
+                            window.paymentsManager.setupEventListeners();
+                            window.paymentsManager.listenersSetup = true;
+                        }
                         await window.paymentsManager.loadPayments();
                         await window.paymentsManager.loadFilters();
+                        // Asegurar que la navegación de tabs esté configurada
+                        window.paymentsManager.setupTabNavigation();
+                    } else {
+                        console.error('PaymentsManager no está disponible');
                     }
                     break;
                 case 'attendance':

@@ -243,25 +243,15 @@
                                     <option value="paid">Pagado</option>
                                     <option value="pending">Pendiente</option>
                                     <option value="overdue">Atrasado</option>
+                                    <option value="congela">Congelado</option>
                                 </select>
                                 <input type="month" id="paymentMonthFilter">
+                                <input type="text" id="paymentStudentSearch" placeholder="Buscar estudiante...">
                             </div>
-                            <div class="table-container">
-                                <table id="paymentsTable" class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Estudiante</th>
-                                            <th>Grupo</th>
-                                            <th>Mes</th>
-                                            <th>Monto</th>
-                                            <th>Estado</th>
-                                            <th>Fecha Pago</th>
-                                            <th>Método de Pago</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
+                            <div class="table-container payments-table-container">
+                                <div id="paymentsTableContainer">
+                                    <!-- La tabla se generará dinámicamente -->
+                                </div>
                             </div>
                         </div>
 

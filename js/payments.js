@@ -18,8 +18,10 @@ class PaymentsManager {
         this.filteredPayments = {};
         this.filteredGiras = {};
         this.currentTab = 'payments-tab';
+        this.currentFilters = {};
+        this.listenersSetup = false;
         // No inicializar automáticamente, esperar a que la autenticación esté lista
-        this.setupEventListeners();
+        // Los event listeners se configurarán cuando se navegue a la sección
     }
 
     async init() {
@@ -34,78 +36,76 @@ class PaymentsManager {
     }
 
     setupEventListeners() {
+        // Evitar duplicar listeners
+        if (this.listenersSetup) {
+            console.log('Event listeners ya configurados');
+            return;
+        }
+
         // Botón para agregar nuevo pago
         const addPaymentBtn = document.getElementById('addPaymentBtn');
         if (addPaymentBtn) {
-            addPaymentBtn.addEventListener('click', () => {
+            // Remover listener anterior si existe
+            const newAddPaymentBtn = addPaymentBtn.cloneNode(true);
+            addPaymentBtn.parentNode.replaceChild(newAddPaymentBtn, addPaymentBtn);
+            newAddPaymentBtn.addEventListener('click', () => {
+                console.log('Click en registrar pago');
                 this.showPaymentModal();
             });
+            console.log('Listener de agregar pago configurado');
+        } else {
+            console.warn('Botón addPaymentBtn no encontrado');
         }
 
         // Botón para agregar nueva gira
         const addGiraBtn = document.getElementById('addGiraBtn');
         if (addGiraBtn) {
-            addGiraBtn.addEventListener('click', () => {
+            // Remover listener anterior si existe
+            const newAddGiraBtn = addGiraBtn.cloneNode(true);
+            addGiraBtn.parentNode.replaceChild(newAddGiraBtn, addGiraBtn);
+            newAddGiraBtn.addEventListener('click', () => {
+                console.log('Click en nueva gira');
                 this.showGiraModal();
             });
+            console.log('Listener de agregar gira configurado');
+        } else {
+            console.warn('Botón addGiraBtn no encontrado');
         }
 
-        // Filtros
-        const paymentGroupFilter = document.getElementById('paymentGroupFilter');
-        if (paymentGroupFilter) {
-            paymentGroupFilter.addEventListener('change', () => {
+        // Filtros - usar delegación de eventos para evitar duplicados
+        const paymentsTab = document.getElementById('payments-tab');
+        if (paymentsTab) {
+            paymentsTab.addEventListener('change', (e) => {
+                if (e.target.id === 'paymentGroupFilter' || 
+                    e.target.id === 'paymentStatusFilter' || 
+                    e.target.id === 'paymentMonthFilter') {
                 this.applyFilters();
+                }
             });
+            paymentsTab.addEventListener('input', (e) => {
+                if (e.target.id === 'paymentStudentSearch') {
+                this.applyFilters();
         }
-
-        const paymentCourseFilter = document.getElementById('paymentCourseFilter');
-        if (paymentCourseFilter) {
-            paymentCourseFilter.addEventListener('change', () => {
-                this.applyFilters();
             });
-        }
-
-        const paymentStatusFilter = document.getElementById('paymentStatusFilter');
-        if (paymentStatusFilter) {
-            paymentStatusFilter.addEventListener('change', () => {
-                this.applyFilters();
-            });
-        }
-
-        const paymentMonthFilter = document.getElementById('paymentMonthFilter');
-        if (paymentMonthFilter) {
-            paymentMonthFilter.addEventListener('change', () => {
-                this.applyFilters();
-            });
-            // Establecer mes actual por defecto
-            const currentMonth = new Date().toISOString().slice(0, 7);
-            paymentMonthFilter.value = currentMonth;
         }
 
         // Filtros para giras
-        const giraGroupFilter = document.getElementById('giraGroupFilter');
-        if (giraGroupFilter) {
-            giraGroupFilter.addEventListener('change', () => {
+        const girasTab = document.getElementById('giras-tab');
+        if (girasTab) {
+            girasTab.addEventListener('change', (e) => {
+                if (e.target.id === 'giraGroupFilter' || 
+                    e.target.id === 'giraStatusFilter' || 
+                    e.target.id === 'giraDateFilter') {
                 this.applyGiraFilters();
-            });
-        }
-
-        const giraStatusFilter = document.getElementById('giraStatusFilter');
-        if (giraStatusFilter) {
-            giraStatusFilter.addEventListener('change', () => {
-                this.applyGiraFilters();
-            });
-        }
-
-        const giraDateFilter = document.getElementById('giraDateFilter');
-        if (giraDateFilter) {
-            giraDateFilter.addEventListener('change', () => {
-                this.applyGiraFilters();
+                }
             });
         }
 
         // Configurar actualización en tiempo real
         this.setupRealTimeUpdates();
+        
+        this.listenersSetup = true;
+        console.log('Todos los event listeners configurados');
     }
 
     setupRealTimeUpdates() {
@@ -141,8 +141,10 @@ class PaymentsManager {
             
             if (snapshot.exists()) {
                 this.payments = snapshot.val();
+                console.log('Pagos cargados:', Object.keys(this.payments).length);
             } else {
                 this.payments = {};
+                console.warn('No se encontraron pagos en la base de datos');
             }
             
             this.applyFilters();
@@ -169,6 +171,10 @@ class PaymentsManager {
             if (studentsSnapshot.exists()) {
                 this.students = studentsSnapshot.val();
                 this.updatePaymentGroupFilter();
+                console.log('Estudiantes cargados:', Object.keys(this.students).length);
+            } else {
+                console.warn('No se encontraron estudiantes en la base de datos');
+                this.students = {};
             }
 
             // Cargar cursos
@@ -187,6 +193,9 @@ class PaymentsManager {
                 this.updatePaymentGroupFilter();
                 this.updateGiraGroupFilter();
             }
+            
+            // Renderizar tabla después de cargar datos
+            this.renderPaymentsTable();
         } catch (error) {
             console.error('Error al cargar filtros:', error);
             // Solo mostrar notificación si no es un error de permisos
@@ -274,6 +283,7 @@ class PaymentsManager {
         const courseFilter = document.getElementById('paymentCourseFilter')?.value || '';
         const statusFilter = document.getElementById('paymentStatusFilter')?.value || '';
         const monthFilter = document.getElementById('paymentMonthFilter')?.value || '';
+        const studentSearch = document.getElementById('paymentStudentSearch')?.value.toLowerCase() || '';
 
         this.filteredPayments = Object.fromEntries(
             Object.entries(this.payments).filter(([id, payment]) => {
@@ -281,70 +291,375 @@ class PaymentsManager {
                 const matchesCourse = !courseFilter || payment.course === courseFilter;
                 const matchesStatus = !statusFilter || payment.status === statusFilter;
                 const matchesMonth = !monthFilter || payment.month === monthFilter;
+                const matchesStudent = !studentSearch || 
+                    (payment.studentName && payment.studentName.toLowerCase().includes(studentSearch)) ||
+                    (payment.studentCedula && payment.studentCedula.toString().includes(studentSearch));
                 
-                return matchesGroup && matchesCourse && matchesStatus && matchesMonth;
+                return matchesGroup && matchesCourse && matchesStatus && matchesMonth && matchesStudent;
             })
         );
+
+        // Guardar filtros para usar en renderPaymentsTable
+        this.currentFilters = {
+            groupFilter,
+            statusFilter,
+            studentSearch
+        };
 
         this.renderPaymentsTable();
     }
 
     renderPaymentsTable() {
-        const tbody = document.querySelector('#paymentsTable tbody');
-        if (!tbody) return;
+        const container = document.getElementById('paymentsTableContainer');
+        if (!container) {
+            console.warn('Container paymentsTableContainer no encontrado');
+            return;
+        }
 
+        console.log('Renderizando tabla de pagos...', {
+            students: Object.keys(this.students || {}).length,
+            payments: Object.keys(this.payments || {}).length,
+            filteredPayments: Object.keys(this.filteredPayments || {}).length
+        });
+
+        // Materias disponibles (orden según ATV)
+        const subjects = [
+            { key: 'anatomia', code: 'ATV-001', label: 'ANATOMIA' },
+            { key: 'zootecnia', code: 'ATV-002', label: 'ZOOTECNIA Y NUTRICIÓN' },
+            { key: 'fisiologia', code: 'ATV-003', label: 'FISIOLOGÍA' },
+            { key: 'patologia', code: 'ATV-004', label: 'PATOLOGÍA' },
+            { key: 'terminologia', code: 'ATV-005', label: 'TERMINOLOGÍA Y ÉTICA PROFESIONAL' },
+            { key: 'infecciosas', code: 'ATV-006', label: 'ENFERMEDADES INFECCIOSAS' },
+            { key: 'parasitarias', code: 'ATV-007', label: 'PARASITARIAS' },
+            { key: 'farmacologia', code: 'ATV-008', label: 'FARMACOLOGÍA' },
+            { key: 'lab_clinico', code: 'ATV-009', label: 'LABORATORIO CLÍNICO' },
+            { key: 'consulta_externa', code: 'ATV-010', label: 'ASISTENTE DE CONSULTA EXTERNA' },
+            { key: 'medicina_interna', code: 'ATV-011', label: 'ASISTENTE DE MEDICINA INTERNA' },
+            { key: 'quirofano', code: 'ATV-012', label: 'ASISTENTE DE QUIRÓFANO' },
+            { key: 'proyecto_final', code: 'ATV-013', label: 'PROYECTO FINAL' }
+        ];
+
+        // Agrupar estudiantes por grupo
+        const studentsByGroup = {};
         const paymentsToShow = Object.keys(this.filteredPayments).length > 0 ? 
             this.filteredPayments : this.payments;
 
-        if (Object.keys(paymentsToShow).length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="8" class="text-center">
-                        <div style="padding: 40px; color: #6c757d;">
+        // Aplicar filtros a estudiantes
+        const groupFilter = this.currentFilters?.groupFilter || '';
+        const studentSearch = this.currentFilters?.studentSearch || '';
+
+        // Primero, obtener todos los estudiantes activos
+        // Si no hay estudiantes cargados, intentar mostrar al menos los que tienen pagos
+        const studentsWithPayments = new Set();
+        Object.values(paymentsToShow).forEach(payment => {
+            if (payment.studentId) {
+                studentsWithPayments.add(payment.studentId);
+            }
+        });
+
+        // Si hay estudiantes cargados, usarlos
+        if (Object.keys(this.students || {}).length > 0) {
+            Object.entries(this.students).forEach(([studentId, student]) => {
+                if (student.status !== 'active') return;
+                
+                // Aplicar filtro de grupo
+                const studentGroup = student.group || 'Sin grupo';
+                if (groupFilter && studentGroup !== groupFilter) return;
+                
+                // Aplicar filtro de búsqueda
+                const studentName = `${student.firstName} ${student.lastName}`.toLowerCase();
+                const studentCedula = (student.cedula || '').toString().toLowerCase();
+                if (studentSearch && !studentName.includes(studentSearch) && !studentCedula.includes(studentSearch)) {
+                    return;
+                }
+                
+                const groupValue = studentGroup;
+                if (!studentsByGroup[groupValue]) {
+                    studentsByGroup[groupValue] = [];
+                }
+                
+                studentsByGroup[groupValue].push({
+                    id: studentId,
+                    name: `${student.firstName} ${student.lastName}`,
+                    cedula: student.cedula || '',
+                    group: groupValue
+                });
+            });
+        } else if (studentsWithPayments.size > 0) {
+            // Si no hay estudiantes cargados pero sí hay pagos, crear entradas temporales
+            studentsWithPayments.forEach(studentId => {
+                const studentPayments = Object.values(paymentsToShow).filter(p => p.studentId === studentId);
+                if (studentPayments.length === 0) return;
+                
+                const firstPayment = studentPayments[0];
+                const studentGroup = firstPayment.group || 'Sin grupo';
+                
+                if (groupFilter && studentGroup !== groupFilter) return;
+                
+                if (!studentsByGroup[studentGroup]) {
+                    studentsByGroup[studentGroup] = [];
+                }
+                
+                studentsByGroup[studentGroup].push({
+                    id: studentId,
+                    name: firstPayment.studentName || 'Estudiante desconocido',
+                    cedula: firstPayment.studentCedula || '',
+                    group: studentGroup
+                });
+            });
+        }
+
+        // Si no hay estudiantes, mostrar mensaje vacío
+        if (Object.keys(studentsByGroup).length === 0) {
+            container.innerHTML = `
+                <div class="text-center" style="padding: 40px; color: #6c757d;">
                             <i class="fas fa-credit-card fa-3x mb-3"></i>
-                            <h4>No hay pagos registrados</h4>
-                            <p>Comience registrando un nuevo pago</p>
+                    <h4>No hay estudiantes o pagos registrados</h4>
+                    <p>Comience registrando un nuevo pago o estudiante</p>
+                    <small style="display: block; margin-top: 10px; color: #999;">
+                        Estudiantes cargados: ${Object.keys(this.students || {}).length} | 
+                        Pagos cargados: ${Object.keys(this.payments || {}).length}
+                    </small>
                         </div>
-                    </td>
-                </tr>
             `;
             return;
         }
 
-        tbody.innerHTML = Object.entries(paymentsToShow)
-            .sort(([,a], [,b]) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-            .map(([id, payment]) => `
-                <tr>
-                    <td>
-                        ${payment.studentName}
-                        ${payment.studentCedula ? `<br><small>Cédula: ${payment.studentCedula}</small>` : ''}
-                        ${payment.course ? `<br><small>Curso: ${payment.course}</small>` : ''}
+        // Renderizar tabla por grupo
+        let html = '';
+        
+        Object.entries(studentsByGroup).sort().forEach(([groupValue, students]) => {
+            const groupLabel = this.getGroupLabel(groupValue);
+            const groupNumber = groupValue.match(/\d+/)?.[0] || '';
+            
+            html += `
+                <div class="payments-group-section">
+                    <div class="payments-group-header">
+                        <h3>GRUPO ${groupNumber || groupValue}</h3>
+                    </div>
+                    <div class="payments-table-wrapper">
+                        <table class="payments-data-table">
+                            <thead>
+                                <tr>
+                                    <th>ALUMNO</th>
+                                    <th>ID</th>
+                                    <th>MATRICULA</th>
+                                    <th>N</th>
+                                    <th>ESTADO</th>
+                                    ${subjects.map(subject => `
+                                        <th>${subject.label}</th>
+                                        <th>Pagado</th>
+                                    `).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${students.map(student => {
+                                    // Obtener pagos del estudiante
+                                    const studentPayments = Object.entries(paymentsToShow)
+                                        .filter(([id, payment]) => payment.studentId === student.id)
+                                        .map(([id, payment]) => payment);
+                                    
+                                    // Crear mapa de pagos por materia
+                                    const paymentsBySubject = {};
+                                    studentPayments.forEach(payment => {
+                                        const courseName = (payment.course || '').toLowerCase().trim();
+                                        const courseCode = (payment.courseCode || '').toLowerCase().trim();
+                                        // Mapear nombres de cursos a materias usando códigos y nombres
+                                        let subjectKey = null;
+                                        
+                                        // Buscar por código primero (más preciso)
+                                        if (courseCode.includes('atv-001') || courseName.includes('atv-001') || 
+                                            courseName.includes('anatom') || courseName.includes('anatomía')) {
+                                            subjectKey = 'anatomia';
+                                        }
+                                        // ATV-002 ZOOTECNIA Y NUTRICIÓN
+                                        else if (courseCode.includes('atv-002') || courseName.includes('atv-002') || 
+                                                 courseName.includes('zootecn') || courseName.includes('zootecnia') || 
+                                                 (courseName.includes('nutricion') || courseName.includes('nutrición'))) {
+                                            subjectKey = 'zootecnia';
+                                        }
+                                        // ATV-003 FISIOLOGÍA
+                                        else if (courseCode.includes('atv-003') || courseName.includes('atv-003') || 
+                                                 courseName.includes('fisiol') || courseName.includes('fisiología')) {
+                                            subjectKey = 'fisiologia';
+                                        }
+                                        // ATV-004 PATOLOGÍA
+                                        else if (courseCode.includes('atv-004') || courseName.includes('atv-004') || 
+                                                 courseName.includes('patol') || courseName.includes('patología')) {
+                                            subjectKey = 'patologia';
+                                        }
+                                        // ATV-005 TERMINOLOGÍA Y ÉTICA PROFESIONAL
+                                        else if (courseCode.includes('atv-005') || courseName.includes('atv-005') || 
+                                                 courseName.includes('terminol') || courseName.includes('terminología') || 
+                                                 courseName.includes('etica') || courseName.includes('ética') ||
+                                                 courseName.includes('profesional')) {
+                                            subjectKey = 'terminologia';
+                                        }
+                                        // ATV-006 ENFERMEDADES INFECCIOSAS
+                                        else if (courseCode.includes('atv-006') || courseName.includes('atv-006') || 
+                                                 courseName.includes('infeccios') || courseName.includes('infecciosa')) {
+                                            subjectKey = 'infecciosas';
+                                        }
+                                        // ATV-007 PARASITARIAS
+                                        else if (courseCode.includes('atv-007') || courseName.includes('atv-007') || 
+                                                 courseName.includes('parasit') || courseName.includes('parasitaria') || 
+                                                 courseName.includes('parasitología')) {
+                                            subjectKey = 'parasitarias';
+                                        }
+                                        // ATV-008 FARMACOLOGÍA
+                                        else if (courseCode.includes('atv-008') || courseName.includes('atv-008') || 
+                                                 courseName.includes('farmacol') || courseName.includes('farmacología')) {
+                                            subjectKey = 'farmacologia';
+                                        }
+                                        // ATV-009 LABORATORIO CLÍNICO
+                                        else if (courseCode.includes('atv-009') || courseName.includes('atv-009') || 
+                                                 courseName.includes('laboratorio') || courseName.includes('lab') || 
+                                                 (courseName.includes('clínico') || courseName.includes('clinico'))) {
+                                            subjectKey = 'lab_clinico';
+                                        }
+                                        // ATV-010 ASISTENTE DE CONSULTA EXTERNA
+                                        else if (courseCode.includes('atv-010') || courseName.includes('atv-010') || 
+                                                 (courseName.includes('consulta') && courseName.includes('externa'))) {
+                                            subjectKey = 'consulta_externa';
+                                        }
+                                        // ATV-011 ASISTENTE DE MEDICINA INTERNA
+                                        else if (courseCode.includes('atv-011') || courseName.includes('atv-011') || 
+                                                 (courseName.includes('medicina') && courseName.includes('interna'))) {
+                                            subjectKey = 'medicina_interna';
+                                        }
+                                        // ATV-012 ASISTENTE DE QUIRÓFANO
+                                        else if (courseCode.includes('atv-012') || courseName.includes('atv-012') || 
+                                                 courseName.includes('quirofano') || courseName.includes('quirófano')) {
+                                            subjectKey = 'quirofano';
+                                        }
+                                        // ATV-013 PROYECTO FINAL
+                                        else if (courseCode.includes('atv-013') || courseName.includes('atv-013') || 
+                                                 (courseName.includes('proyecto') && courseName.includes('final'))) {
+                                            subjectKey = 'proyecto_final';
+                                        }
+                                        
+                                        if (subjectKey) {
+                                            if (!paymentsBySubject[subjectKey]) {
+                                                paymentsBySubject[subjectKey] = [];
+                                            }
+                                            paymentsBySubject[subjectKey].push(payment);
+                                        }
+                                    });
+                                    
+                                    // Determinar estado general del estudiante
+                                    // Priorizar: ATRASADO > CONGELA > PENDIENTE > PAGADO
+                                    const hasOverdue = studentPayments.some(p => p.status === 'overdue');
+                                    const hasCongela = studentPayments.some(p => p.status === 'congela' || p.notes?.toLowerCase().includes('congela'));
+                                    const hasPending = studentPayments.some(p => p.status === 'pending');
+                                    const hasPaid = studentPayments.some(p => p.status === 'paid');
+                                    
+                                    let generalStatus = '';
+                                    if (hasOverdue) {
+                                        generalStatus = 'ATRASADO';
+                                    } else if (hasCongela) {
+                                        generalStatus = 'CONGELA';
+                                    } else if (hasPending) {
+                                        generalStatus = 'PENDIENTE';
+                                    } else if (hasPaid && studentPayments.length > 0) {
+                                        generalStatus = 'PAGADO';
+                                    }
+                                    
+                                    // Calcular matrícula (usar el primer pago o valor por defecto)
+                                    const matriculaAmount = studentPayments.length > 0 ? 
+                                        (studentPayments[0].amount || 50000) : 50000;
+                                    const matricula = `₡${matriculaAmount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                                    
+                                    return `
+                                        <tr>
+                                            <td>${student.name}</td>
+                                            <td>${student.cedula || student.id}</td>
+                                            <td>${matricula}</td>
+                                            <td class="checkbox-cell">
+                                                <input type="checkbox" ${studentPayments.length > 0 ? 'checked' : ''}>
                     </td>
-                    <td>${this.getGroupLabel(payment.group)}</td>
-                    <td>${this.formatMonth(payment.month)}</td>
-                    <td>${this.formatCurrency(payment.amount)}</td>
-                    <td>
-                        <span class="status-badge ${payment.status}">
-                            ${this.getStatusText(payment.status)}
-                        </span>
-                    </td>
-                    <td>${payment.paymentDate ? this.formatDate(payment.paymentDate) : '-'}</td>
-                    <td>${this.getPaymentMethodText(payment.paymentMethod)}</td>
-                    <td>
-                        <button class="btn-warning" onclick="window.paymentsManager.editPayment('${id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn-danger" onclick="window.paymentsManager.deletePayment('${id}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                        ${payment.status !== 'paid' ? `
-                            <button class="btn-success" onclick="window.paymentsManager.markAsPaid('${id}')">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        ` : ''}
-                    </td>
+                                            <td class="status-cell editable-status-cell ${generalStatus.toLowerCase()}" 
+                                                data-student-id="${student.id}"
+                                                data-current-status="${generalStatus.toLowerCase() || ''}"
+                                                onclick="window.paymentsManager.editStudentStatus(this)"
+                                                style="cursor: pointer; position: relative;">
+                                                ${generalStatus || '<span style="color: #999; font-size: 11px;">Click para agregar</span>'}
+                                            </td>
+                                            ${subjects.map(subject => {
+                                                const subjectPayments = paymentsBySubject[subject.key] || [];
+                                                const latestPayment = subjectPayments.sort((a, b) => 
+                                                    new Date(b.paymentDate || b.createdAt || 0) - 
+                                                    new Date(a.paymentDate || a.createdAt || 0)
+                                                )[0];
+                                                
+                                                let cellContent = '';
+                                                let cellClass = '';
+                                                let isChecked = false;
+                                                let paidAmount = '';
+                                                let paymentId = '';
+                                                let currentDate = '';
+                                                
+                                                if (latestPayment) {
+                                                    paymentId = Object.keys(paymentsToShow).find(id => paymentsToShow[id] === latestPayment) || '';
+                                                    
+                                                    if (latestPayment.paymentDate) {
+                                                        const date = new Date(latestPayment.paymentDate);
+                                                        const day = date.getDate();
+                                                        const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+                                                        const month = monthNames[date.getMonth()];
+                                                        const year = date.getFullYear().toString().slice(-2);
+                                                        cellContent = `${day} ${month} ${year}`;
+                                                        cellClass = 'date-cell editable-date-cell';
+                                                        isChecked = true;
+                                                        currentDate = latestPayment.paymentDate;
+                                                        // Mostrar monto pagado
+                                                        if (latestPayment.amount) {
+                                                            paidAmount = `₡${latestPayment.amount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                                                        }
+                                                    } else if (latestPayment.status === 'congela' || latestPayment.notes?.toLowerCase().includes('congela')) {
+                                                        cellContent = 'CONGELA';
+                                                        cellClass = 'status-cell congela';
+                                                    } else if (latestPayment.status === 'overdue') {
+                                                        cellContent = 'ATRASADO';
+                                                        cellClass = 'status-cell atrasado';
+                                                    } else if (latestPayment.notes) {
+                                                        cellContent = latestPayment.notes.substring(0, 30);
+                                                        cellClass = 'status-cell note';
+                                                    }
+                                                }
+                                                
+                                                // Si no hay pago, crear una celda editable vacía
+                                                if (!latestPayment) {
+                                                    cellClass = 'editable-date-cell empty-date-cell';
+                                                }
+                                                
+                                                return `
+                                                    <td class="${cellClass}" 
+                                                        data-student-id="${student.id}" 
+                                                        data-subject-key="${subject.key}"
+                                                        data-subject-code="${subject.code}"
+                                                        data-payment-id="${paymentId}"
+                                                        data-current-date="${currentDate}"
+                                                        onclick="window.paymentsManager.editSubjectDate(this)"
+                                                        style="cursor: pointer; position: relative;">
+                                                        ${cellContent || '<span style="color: #999; font-size: 11px;">Click para agregar</span>'}
+                                                        ${cellContent ? `<input type="date" class="date-input-hidden" value="${currentDate}" style="display: none;">` : `<input type="date" class="date-input-hidden" style="display: none;">`}
+                                                    </td>
+                                                    <td class="checkbox-cell paid-amount-cell">
+                                                        ${isChecked ? `<input type="checkbox" checked><br><small style="font-size: 10px; color: #28a745; font-weight: 600;">${paidAmount}</small>` : '<input type="checkbox">'}
+                                                    </td>
+                                                `;
+                                            }).join('')}
                 </tr>
-            `).join('');
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
     }
 
     showPaymentModal(paymentId = null) {
@@ -920,6 +1235,8 @@ class PaymentsManager {
     updateStudentOptions() {
         // Actualizar filtros y opciones que dependan de estudiantes
         this.loadFilters();
+        // También renderizar la tabla si estamos en la sección de pagos
+        this.renderPaymentsTable();
     }
 
     // Método para actualizar opciones de cursos (usado por el sistema de tiempo real)
@@ -1355,13 +1672,367 @@ class PaymentsManager {
             window.app.showModal(modalContent);
         }
     }
+
+    async editSubjectDate(cell) {
+        const studentId = cell.dataset.studentId;
+        const subjectKey = cell.dataset.subjectKey;
+        const subjectCode = cell.dataset.subjectCode;
+        const paymentId = cell.dataset.paymentId;
+        const currentDate = cell.dataset.currentDate;
+        
+        // Crear input de fecha
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'date-input-visible';
+        dateInput.style.cssText = 'width: 100%; padding: 4px; border: 2px solid #3b82f6; border-radius: 4px; font-size: 12px;';
+        if (currentDate) {
+            dateInput.value = currentDate;
+        }
+        
+        // Reemplazar contenido de la celda temporalmente
+        const originalContent = cell.innerHTML;
+        cell.innerHTML = '';
+        cell.appendChild(dateInput);
+        dateInput.focus();
+        dateInput.select();
+        
+        const saveDate = async () => {
+            const selectedDate = dateInput.value;
+            if (!selectedDate) {
+                cell.innerHTML = originalContent;
+                return;
+            }
+            
+            // Buscar el curso correspondiente a esta materia
+            const courseName = this.getCourseNameForSubject(subjectCode, subjectKey);
+            
+            // Buscar si ya existe un pago para este estudiante y materia
+            let existingPayment = null;
+            if (paymentId && this.payments[paymentId]) {
+                existingPayment = this.payments[paymentId];
+            } else {
+                // Buscar pago existente
+                existingPayment = Object.values(this.payments).find(p => 
+                    p.studentId === studentId && 
+                    p.course && p.course.toLowerCase().includes(subjectKey.toLowerCase())
+                );
+            }
+            
+            try {
+                if (existingPayment) {
+                    // Actualizar pago existente
+                    const paymentRef = ref(db, `payments/${Object.keys(this.payments).find(id => this.payments[id] === existingPayment)}`);
+                    await set(paymentRef, {
+                        ...existingPayment,
+                        paymentDate: selectedDate,
+                        status: 'paid',
+                        updatedAt: new Date().toISOString()
+                    });
+                } else {
+                    // Crear nuevo pago
+                    const student = this.students[studentId];
+                    if (!student) {
+                        console.error('Estudiante no encontrado');
+                        cell.innerHTML = originalContent;
+                        return;
+                    }
+                    
+                    // Buscar precio del curso
+                    const course = Object.values(this.courses).find(c => 
+                        c.name && (c.name.toLowerCase().includes(subjectKey.toLowerCase()) || 
+                                   c.code === subjectCode)
+                    );
+                    
+                    const paymentData = {
+                        studentId: studentId,
+                        studentName: `${student.firstName} ${student.lastName}`,
+                        studentCedula: student.cedula || '',
+                        group: student.group || '',
+                        course: courseName,
+                        courseCode: subjectCode,
+                        month: selectedDate.slice(0, 7), // YYYY-MM
+                        amount: course ? course.price : 50000,
+                        status: 'paid',
+                        paymentDate: selectedDate,
+                        paymentMethod: null,
+                        notes: `Pago de ${this.getSubjectLabel(subjectKey)}`,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    const paymentsRef = ref(db, 'payments');
+                    await push(paymentsRef, paymentData);
+                }
+                
+                // Recargar pagos y renderizar
+                await this.loadPayments();
+                this.renderPaymentsTable();
+                
+                if (window.app) {
+                    window.app.showNotification('Fecha guardada correctamente', 'success');
+                }
+            } catch (error) {
+                console.error('Error al guardar fecha:', error);
+                cell.innerHTML = originalContent;
+                if (window.app) {
+                    window.app.showNotification('Error al guardar la fecha', 'error');
+                }
+            }
+        };
+        
+        const cancelEdit = () => {
+            cell.innerHTML = originalContent;
+        };
+        
+        dateInput.addEventListener('blur', saveDate);
+        dateInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveDate();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+            }
+        });
+    }
+    
+    getCourseNameForSubject(subjectCode, subjectKey) {
+        // Buscar curso por código o nombre
+        const course = Object.values(this.courses).find(c => 
+            (c.code && c.code.toLowerCase() === subjectCode.toLowerCase()) ||
+            (c.name && c.name.toLowerCase().includes(subjectKey.toLowerCase()))
+        );
+        
+        if (course) {
+            return course.name;
+        }
+        
+        // Si no se encuentra, usar el código como nombre
+        const subjectLabels = {
+            'anatomia': 'ATV-001 ANATOMIA',
+            'zootecnia': 'ATV-002 ZOOTECNIA Y NUTRICIÓN',
+            'fisiologia': 'ATV-003 FISIOLOGÍA',
+            'patologia': 'ATV-004 PATOLOGÍA',
+            'terminologia': 'ATV-005 TERMINOLOGÍA Y ÉTICA PROFESIONAL',
+            'infecciosas': 'ATV-006 ENFERMEDADES INFECCIOSAS',
+            'parasitarias': 'ATV-007 PARASITARIAS',
+            'farmacologia': 'ATV-008 FARMACOLOGÍA',
+            'lab_clinico': 'ATV-009 LABORATORIO CLÍNICO',
+            'consulta_externa': 'ATV-010 ASISTENTE DE CONSULTA EXTERNA',
+            'medicina_interna': 'ATV-011 ASISTENTE DE MEDICINA INTERNA',
+            'quirofano': 'ATV-012 ASISTENTE DE QUIRÓFANO',
+            'proyecto_final': 'ATV-013 PROYECTO FINAL'
+        };
+        
+        return subjectLabels[subjectKey] || subjectCode;
+    }
+    
+    getSubjectLabel(subjectKey) {
+        const subjectLabels = {
+            'anatomia': 'ANATOMIA',
+            'zootecnia': 'ZOOTECNIA Y NUTRICIÓN',
+            'fisiologia': 'FISIOLOGÍA',
+            'patologia': 'PATOLOGÍA',
+            'terminologia': 'TERMINOLOGÍA Y ÉTICA PROFESIONAL',
+            'infecciosas': 'ENFERMEDADES INFECCIOSAS',
+            'parasitarias': 'PARASITARIAS',
+            'farmacologia': 'FARMACOLOGÍA',
+            'lab_clinico': 'LABORATORIO CLÍNICO',
+            'consulta_externa': 'ASISTENTE DE CONSULTA EXTERNA',
+            'medicina_interna': 'ASISTENTE DE MEDICINA INTERNA',
+            'quirofano': 'ASISTENTE DE QUIRÓFANO',
+            'proyecto_final': 'PROYECTO FINAL'
+        };
+        
+        return subjectLabels[subjectKey] || subjectKey;
+    }
+
+    async editStudentStatus(cell) {
+        // Evitar múltiples ediciones simultáneas
+        if (cell.dataset.editing === 'true') {
+            return;
+        }
+        cell.dataset.editing = 'true';
+        
+        const studentId = cell.dataset.studentId;
+        const currentStatus = cell.dataset.currentStatus || '';
+        
+        // Guardar contenido original
+        const originalContent = cell.innerHTML;
+        const originalClasses = cell.className;
+        
+        // Crear dropdown de estados
+        const statusSelect = document.createElement('select');
+        statusSelect.className = 'status-select-visible';
+        statusSelect.style.cssText = 'width: 100%; padding: 6px; border: 2px solid #3b82f6; border-radius: 4px; font-size: 12px; background: white; font-weight: 600; cursor: pointer; z-index: 1000;';
+        
+        const statusOptions = [
+            { value: '', label: 'Seleccionar estado' },
+            { value: 'pagado', label: 'PAGADO' },
+            { value: 'pendiente', label: 'PENDIENTE' },
+            { value: 'atrasado', label: 'ATRASADO' },
+            { value: 'congela', label: 'CONGELADO' }
+        ];
+        
+        statusOptions.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.value;
+            optionElement.textContent = option.label;
+            if (option.value === currentStatus) {
+                optionElement.selected = true;
+            }
+            statusSelect.appendChild(optionElement);
+        });
+        
+        // Reemplazar contenido de la celda
+        cell.innerHTML = '';
+        cell.className = 'status-cell editable-status-cell';
+        cell.appendChild(statusSelect);
+        
+        // Variables para controlar el guardado
+        let isSaving = false;
+        let hasChanged = false;
+        
+        const saveStatus = async () => {
+            if (isSaving) return;
+            
+            const selectedStatus = statusSelect.value;
+            if (!selectedStatus) {
+                // Si no se seleccionó nada, restaurar contenido original
+                cell.innerHTML = originalContent;
+                cell.className = originalClasses;
+                cell.dataset.editing = 'false';
+                return;
+            }
+            
+            isSaving = true;
+            
+            // Obtener todos los pagos del estudiante
+            const studentPayments = Object.entries(this.payments).filter(([id, payment]) => 
+                payment.studentId === studentId
+            );
+            
+            try {
+                // Mapear estado seleccionado al formato de la base de datos
+                const dbStatus = selectedStatus === 'pagado' ? 'paid' : 
+                                selectedStatus === 'pendiente' ? 'pending' :
+                                selectedStatus === 'atrasado' ? 'overdue' : 'congela';
+                
+                // Si no hay pagos, crear uno nuevo con el estado seleccionado
+                if (studentPayments.length === 0) {
+                    const student = this.students[studentId];
+                    if (!student) {
+                        throw new Error('Estudiante no encontrado');
+                    }
+                    
+                    // Crear un pago genérico para el estudiante
+                    const paymentData = {
+                        studentId: studentId,
+                        studentName: `${student.firstName} ${student.lastName}`,
+                        studentCedula: student.cedula || '',
+                        group: student.group || '',
+                        course: 'Estado General',
+                        month: new Date().toISOString().slice(0, 7),
+                        amount: 0,
+                        status: dbStatus,
+                        paymentDate: null,
+                        paymentMethod: null,
+                        notes: `Estado: ${selectedStatus.toUpperCase()}`,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    const paymentsRef = ref(db, 'payments');
+                    await push(paymentsRef, paymentData);
+                } else {
+                    // Actualizar el estado de todos los pagos del estudiante
+                    const updates = [];
+                    for (const [paymentId, payment] of studentPayments) {
+                        const paymentRef = ref(db, `payments/${paymentId}`);
+                        const updatedPayment = {
+                            ...payment,
+                            status: dbStatus,
+                            updatedAt: new Date().toISOString()
+                        };
+                        updates.push(set(paymentRef, updatedPayment));
+                    }
+                    
+                    if (updates.length > 0) {
+                        await Promise.all(updates);
+                    }
+                }
+                
+                // Recargar pagos y renderizar
+                await this.loadPayments();
+                this.renderPaymentsTable();
+                
+                if (window.app) {
+                    window.app.showNotification('Estado actualizado correctamente', 'success');
+                }
+            } catch (error) {
+                console.error('Error al guardar estado:', error);
+                cell.innerHTML = originalContent;
+                cell.className = originalClasses;
+                if (window.app) {
+                    window.app.showNotification('Error al guardar el estado', 'error');
+                }
+            } finally {
+                isSaving = false;
+                cell.dataset.editing = 'false';
+            }
+        };
+        
+        const cancelEdit = () => {
+            if (isSaving) return;
+            cell.innerHTML = originalContent;
+            cell.className = originalClasses;
+            cell.dataset.editing = 'false';
+        };
+        
+        // Evento change - guardar inmediatamente cuando se selecciona
+        statusSelect.addEventListener('change', (e) => {
+            e.stopPropagation();
+            hasChanged = true;
+            saveStatus();
+        });
+        
+        // Evento blur - solo si no se ha cambiado ya
+        statusSelect.addEventListener('blur', (e) => {
+            e.stopPropagation();
+            // Delay para permitir que el evento change se procese primero
+            setTimeout(() => {
+                if (!hasChanged && document.body.contains(statusSelect) && !isSaving) {
+                    cancelEdit();
+                }
+            }, 150);
+        });
+        
+        // Evento keydown
+        statusSelect.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelEdit();
+            }
+        });
+        
+        // Enfocar y abrir el dropdown
+        setTimeout(() => {
+            statusSelect.focus();
+            statusSelect.click();
+        }, 10);
+    }
 }
 
 // Crear instancia global
 document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('paymentsTable')) {
+    // Crear instancia si existe el contenedor de pagos o la sección de pagos
+    if (document.getElementById('paymentsTableContainer') || document.getElementById('payments')) {
         window.paymentsManager = new PaymentsManager();
+        console.log('PaymentsManager creado');
         // No inicializar automáticamente, esperar a que la app esté lista
+    } else {
+        console.warn('No se encontró el contenedor de pagos');
     }
 });
 
