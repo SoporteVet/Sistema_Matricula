@@ -3411,6 +3411,17 @@ a[data-section="cronograma"] {
     cursor: pointer;
 }
 
+/* Estilo para estudiantes que abandonaron */
+.payments-data-table tbody tr.student-dropped {
+    opacity: 0.7;
+    background-color: rgba(220, 53, 69, 0.05) !important;
+}
+
+.payments-data-table tbody tr.student-dropped:hover {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    opacity: 0.9;
+}
+
 /* Celdas de estado */
 .payments-data-table .status-cell {
     font-weight: 600;

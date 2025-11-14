@@ -357,10 +357,11 @@ class PaymentsManager {
             }
         });
 
-        // Si hay estudiantes cargados, usarlos
+        // Si hay estudiantes cargados, usarlos (incluir todos, incluso los que abandonaron)
         if (Object.keys(this.students || {}).length > 0) {
             Object.entries(this.students).forEach(([studentId, student]) => {
-                if (student.status !== 'active') return;
+                // Mostrar todos los estudiantes, sin importar su estado
+                // if (student.status !== 'active') return; // REMOVIDO - mostrar todos
                 
                 // Aplicar filtro de grupo
                 const studentGroup = student.group || 'Sin grupo';
@@ -382,7 +383,8 @@ class PaymentsManager {
                     id: studentId,
                     name: `${student.firstName} ${student.lastName}`,
                     cedula: student.cedula || '',
-                    group: groupValue
+                    group: groupValue,
+                    status: student.status || 'active' // Incluir el estado del estudiante
                 });
             });
         } else if (studentsWithPayments.size > 0) {
@@ -569,9 +571,15 @@ class PaymentsManager {
                                         (studentPayments[0].amount || 50000) : 50000;
                                     const matricula = `₡${matriculaAmount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
                                     
+                                    // Determinar si el estudiante abandonó
+                                    const studentData = this.students[student.id];
+                                    const studentStatus = studentData?.status || student.status || 'active';
+                                    const isDropped = studentStatus === 'dropped' || studentStatus === 'inactive';
+                                    const rowClass = isDropped ? 'student-dropped' : '';
+                                    
                                     return `
-                                        <tr>
-                                            <td>${student.name}</td>
+                                        <tr class="${rowClass}">
+                                            <td>${student.name}${isDropped ? ' <span style="color: #dc3545; font-size: 10px;">(Abandonó)</span>' : ''}</td>
                                             <td>${student.cedula || student.id}</td>
                                             <td>${matricula}</td>
                                             <td class="checkbox-cell">
@@ -586,10 +594,12 @@ class PaymentsManager {
                                             </td>
                                             ${subjects.map(subject => {
                                                 const subjectPayments = paymentsBySubject[subject.key] || [];
-                                                const latestPayment = subjectPayments.sort((a, b) => 
-                                                    new Date(b.paymentDate || b.createdAt || 0) - 
-                                                    new Date(a.paymentDate || a.createdAt || 0)
-                                                )[0];
+                                                const latestPayment = subjectPayments.sort((a, b) => {
+                                                    // Comparar fechas sin problemas de zona horaria
+                                                    const dateA = a.paymentDate || a.createdAt || '0';
+                                                    const dateB = b.paymentDate || b.createdAt || '0';
+                                                    return dateB.localeCompare(dateA); // Comparación de strings YYYY-MM-DD
+                                                })[0];
                                                 
                                                 let cellContent = '';
                                                 let cellClass = '';
@@ -602,12 +612,15 @@ class PaymentsManager {
                                                     paymentId = Object.keys(paymentsToShow).find(id => paymentsToShow[id] === latestPayment) || '';
                                                     
                                                     if (latestPayment.paymentDate) {
-                                                        const date = new Date(latestPayment.paymentDate);
-                                                        const day = date.getDate();
+                                                        // Parsear fecha sin problemas de zona horaria
+                                                        const dateStr = latestPayment.paymentDate;
+                                                        const [year, month, day] = dateStr.split('-').map(Number);
+                                                        const date = new Date(year, month - 1, day); // Usar constructor local
+                                                        const dayNum = date.getDate();
                                                         const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
-                                                        const month = monthNames[date.getMonth()];
-                                                        const year = date.getFullYear().toString().slice(-2);
-                                                        cellContent = `${day} ${month} ${year}`;
+                                                        const monthName = monthNames[date.getMonth()];
+                                                        const yearShort = date.getFullYear().toString().slice(-2);
+                                                        cellContent = `${dayNum} ${monthName} ${yearShort}`;
                                                         cellClass = 'date-cell editable-date-cell';
                                                         isChecked = true;
                                                         currentDate = latestPayment.paymentDate;
