@@ -322,7 +322,7 @@ class PaymentsManager {
             filteredPayments: Object.keys(this.filteredPayments || {}).length
         });
 
-        // Materias disponibles (orden según ATV)
+        // Materias disponibles (orden según ATV) + cobros especiales
         const subjects = [
             { key: 'anatomia', code: 'ATV-001', label: 'ANATOMIA' },
             { key: 'zootecnia', code: 'ATV-002', label: 'ZOOTECNIA Y NUTRICIÓN' },
@@ -336,7 +336,10 @@ class PaymentsManager {
             { key: 'consulta_externa', code: 'ATV-010', label: 'ASISTENTE DE CONSULTA EXTERNA' },
             { key: 'medicina_interna', code: 'ATV-011', label: 'ASISTENTE DE MEDICINA INTERNA' },
             { key: 'quirofano', code: 'ATV-012', label: 'ASISTENTE DE QUIRÓFANO' },
-            { key: 'proyecto_final', code: 'ATV-013', label: 'PROYECTO FINAL' }
+            { key: 'proyecto_final', code: 'ATV-013', label: 'PROYECTO FINAL' },
+            { key: 'gira', code: 'GIRA', label: 'GIRA' },
+            { key: 'gabacha', code: 'GAB', label: 'PAGO GABACHA' },
+            { key: 'kit_basico_atv', code: 'KIT-ATV', label: 'KIT BÁSICO ATV' }
         ];
 
         // Agrupar estudiantes por grupo
@@ -539,6 +542,23 @@ class PaymentsManager {
                                                  (courseName.includes('proyecto') && courseName.includes('final'))) {
                                             subjectKey = 'proyecto_final';
                                         }
+                                        // Gira
+                                        else if (courseCode.includes('gira') || courseName.includes('gira')) {
+                                            subjectKey = 'gira';
+                                        }
+                                        // Pago de gabacha
+                                        else if (courseName.includes('gabacha')) {
+                                            subjectKey = 'gabacha';
+                                        }
+                                        // Pago kit básico ATV
+                                        else if (
+                                            courseName.includes('kit') && 
+                                            (courseName.includes('atv') || 
+                                             courseName.includes('básico') || 
+                                             courseName.includes('basico'))
+                                        ) {
+                                            subjectKey = 'kit_basico_atv';
+                                        }
                                         
                                         if (subjectKey) {
                                             if (!paymentsBySubject[subjectKey]) {
@@ -692,6 +712,16 @@ class PaymentsManager {
         const activeCourses = Object.values(this.courses)
             .filter(course => course.status === 'active');
 
+        const specialPaymentConcepts = [
+            { value: 'Gira', label: 'Gira' },
+            { value: 'Pago Gabacha', label: 'Pago de Gabacha' },
+            { value: 'Pago Kit Básico ATV', label: 'Pago de Kit Básico ATV' }
+        ];
+
+        const extraPaymentOptionsHtml = specialPaymentConcepts
+            .map(concept => `<option value="${concept.value}" label="${concept.label}"></option>`)
+            .join('');
+
         const paymentCedulaValue = payment && payment.studentId && this.students[payment.studentId]
             ? (this.students[payment.studentId].cedula || '')
             : (payment?.studentCedula || '');
@@ -757,6 +787,7 @@ class PaymentsManager {
                             ${activeCourses.map(course => `
                                 <option value="${course.name}"></option>
                             `).join('')}
+                            ${extraPaymentOptionsHtml}
                         </datalist>
                     </div>
                     

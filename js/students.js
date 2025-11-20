@@ -14,6 +14,7 @@ class StudentsManager {
         this.filteredStudents = {};
         this.courses = {};
         this.groups = {};
+        this.certificateLogoData = null;
         // No inicializar automáticamente, esperar a que la autenticación esté lista
         this.setupEventListeners();
     }
@@ -900,6 +901,9 @@ class StudentsManager {
                 <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
                     Cerrar
                 </button>
+                <button type="button" class="btn-info" onclick="window.studentsManager.generateStudentCertificate('${studentId}')">
+                    <i class="fas fa-file"></i> Generar Certificado
+                </button>
                 <button type="button" class="btn-primary" onclick="window.studentsManager.editStudent('${studentId}')">
                     <i class="fas fa-edit"></i> Editar
                 </button>
@@ -936,6 +940,106 @@ class StudentsManager {
 
         if (window.app) {
             window.app.showModal(modalContent);
+        }
+    }
+
+    async generateStudentCertificate(studentId) {
+        const student = this.students[studentId];
+        if (!student) {
+            if (window.app) {
+                window.app.showNotification('No se encontró la información del estudiante', 'error');
+            }
+            return;
+        }
+
+        const jsPdfNamespace = window.jspdf || {};
+        const jsPDF = jsPdfNamespace.jsPDF;
+
+        if (!jsPDF) {
+            if (window.app) {
+                window.app.showNotification('La librería jsPDF no está disponible', 'error');
+            }
+            return;
+        }
+
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'pt',
+            format: 'letter'
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginX = 70;
+        let cursorY = 90;
+
+        doc.setLineWidth(0.6);
+        doc.line(marginX, cursorY + 10, pageWidth - marginX, cursorY + 10);
+
+        const centerText = (text, y, options = {}) => {
+            doc.text(text, pageWidth / 2, y, { align: 'center', ...options });
+        };
+
+        // Intentar agregar el logo institucional
+        try {
+            const logoDataUrl = await this.getCertificateLogoDataUrl();
+            if (logoDataUrl) {
+                doc.addImage(logoDataUrl, 'PNG', pageWidth / 2 - 45, 65, 90, 90);
+                cursorY += 80;
+            }
+        } catch (error) {
+            console.warn('No se pudo agregar el logo al certificado:', error);
+        }
+
+        doc.setFont('times', 'bold');
+        doc.setFontSize(18);
+        centerText('Instituto Veterinario San Martín de Porres', cursorY + 50);
+
+        doc.setFontSize(26);
+        cursorY += 120;
+        centerText('CERTIFICA', cursorY);
+
+        doc.setFont('times', 'normal');
+        doc.setFontSize(13);
+        cursorY += 40;
+
+        const fullName = `${student.firstName} ${student.lastName}`.trim();
+        const cedula = student.cedula || '________________';
+        const mainParagraph = `Que ${fullName.toUpperCase()} cédula de identidad ${cedula}, es estudiante activo(a) del programa Asistente Técnico Veterinario. Este programa consta de un total de 13 materias mensuales y, por su naturaleza eminentemente práctica, se imparte en modalidad presencial únicamente, por lo que los estudiantes deben presentarse a recibir sus clases en nuestras instalaciones. Tiene un horario lunes y martes de 6:00 a 10:00 pm. Además, las reposiciones de clases se pueden dar entre semana de miércoles a viernes.`;
+        const mainLines = doc.splitTextToSize(mainParagraph, pageWidth - marginX * 2);
+        doc.text(mainLines, marginX, cursorY);
+        cursorY += mainLines.length * 16 + 20;
+
+        const issueDate = new Date();
+        const dateParagraph = `Se extiende la presente certificación a solicitud del interesado(a) a los ${issueDate.getDate()} días del mes de ${this.getSpanishMonthName(issueDate.getMonth())} del año ${issueDate.getFullYear()}.`;
+        const dateLines = doc.splitTextToSize(dateParagraph, pageWidth - marginX * 2);
+        doc.text(dateLines, marginX, cursorY);
+        cursorY += dateLines.length * 16 + 50;
+
+        doc.setLineWidth(0.5);
+        doc.line(pageWidth / 2 - 140, cursorY, pageWidth / 2 + 140, cursorY);
+        cursorY += 18;
+
+        doc.setFont('times', 'bold');
+        centerText('MBA Guido Alvarez González', cursorY);
+        cursorY += 16;
+        doc.setFont('times', 'normal');
+        centerText('Vida Estudiantil', cursorY);
+        cursorY += 12;
+        centerText('c.c. expediente del estudiante', cursorY);
+
+        doc.setFontSize(10);
+        doc.setTextColor(90, 90, 90);
+        cursorY = pageHeight - 80;
+        centerText('INSTITUTO VETERINARIO SAN MARTÍN DE PORRES / ASISTENTE TÉCNICO EN VETERINARIA', cursorY);
+        cursorY += 14;
+        centerText('San José. Desamparados. San Rafael Abajo. Centro Comercial Zona Centro, 3er piso. Personería Jurídica: 3-105-871528', cursorY);
+
+        const fileName = `certificado_${student.studentId || fullName.replace(/\s+/g, '_')}.pdf`;
+        doc.save(fileName);
+
+        if (window.app) {
+            window.app.showNotification('Certificado generado exitosamente', 'success');
         }
     }
 
@@ -1002,6 +1106,46 @@ class StudentsManager {
     // Obtener estudiante por ID
     getStudent(studentId) {
         return this.students[studentId] || null;
+    }
+
+    getSpanishMonthName(monthIndex) {
+        const months = [
+            'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+            'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+        ];
+        return months[monthIndex] || '';
+    }
+
+    async getCertificateLogoDataUrl() {
+        if (this.certificateLogoData !== null) {
+            return this.certificateLogoData;
+        }
+
+        const logoUrl = 'empresa.jpg';
+
+        try {
+            const img = await new Promise((resolve, reject) => {
+                const image = new Image();
+                image.crossOrigin = 'anonymous';
+                image.onload = () => resolve(image);
+                image.onerror = reject;
+                image.src = logoUrl;
+            });
+
+            const width = img.naturalWidth || img.width;
+            const height = img.naturalHeight || img.height;
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            this.certificateLogoData = canvas.toDataURL('image/png');
+            return this.certificateLogoData;
+        } catch (error) {
+            console.warn('No se pudo cargar el logo del certificado:', error);
+            this.certificateLogoData = null;
+            return null;
+        }
     }
 
     // Exportar lista de estudiantes
