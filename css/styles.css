@@ -3265,6 +3265,7 @@ a[data-section="cronograma"] {
 /* ============= ESTILOS PARA TABLA DE PAGOS ============= */
 .payments-table-container {
     overflow-x: auto;
+    overflow-y: visible;
     max-width: 100%;
 }
 
@@ -3289,8 +3290,8 @@ a[data-section="cronograma"] {
 
 .payments-table-wrapper {
     overflow-x: auto;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(20px);
+    overflow-y: visible;
+    background: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-top: none;
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
@@ -3334,6 +3335,69 @@ a[data-section="cronograma"] {
     padding-left: 15px;
     font-weight: 600;
     color: var(--text-primary);
+}
+
+/* Columnas fijas (sticky) - Solo ALUMNO e ID */
+.payments-data-table th.sticky-col-1,
+.payments-data-table td.sticky-col-1 {
+    position: sticky;
+    left: 0;
+    z-index: 15;
+    background: #ffffff !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    min-width: 200px;
+    max-width: 200px;
+}
+
+.payments-data-table th.sticky-col-1 {
+    background: linear-gradient(135deg, var(--secondary-blue) 0%, var(--light-blue) 100%) !important;
+    position: sticky;
+    left: 0;
+    z-index: 15;
+}
+
+.payments-data-table th.sticky-col-2,
+.payments-data-table td.sticky-col-2 {
+    position: sticky;
+    left: 200px; /* Ancho de columna ALUMNO */
+    z-index: 15;
+    background: #ffffff !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    min-width: 120px;
+    max-width: 120px;
+}
+
+.payments-data-table th.sticky-col-2 {
+    background: linear-gradient(135deg, var(--secondary-blue) 0%, var(--light-blue) 100%) !important;
+    position: sticky;
+    left: 200px;
+    z-index: 15;
+}
+
+/* Asegurar que las filas con fondo alternado también mantengan el fondo sólido en columnas fijas */
+.payments-data-table tbody tr:nth-child(even) td.sticky-col-1,
+.payments-data-table tbody tr:nth-child(even) td.sticky-col-2 {
+    background: #f8f9fa !important;
+}
+
+.payments-data-table tbody tr:nth-child(even):hover td.sticky-col-1,
+.payments-data-table tbody tr:nth-child(even):hover td.sticky-col-2 {
+    background: #e3f2fd !important;
+}
+
+.payments-data-table tbody tr:hover td.sticky-col-1,
+.payments-data-table tbody tr:hover td.sticky-col-2 {
+    background: #f5f5f5 !important;
+}
+
+.payments-data-table tbody tr.student-dropped td.sticky-col-1,
+.payments-data-table tbody tr.student-dropped td.sticky-col-2 {
+    background: #ffeaea !important;
+}
+
+.payments-data-table tbody tr.student-dropped:nth-child(even) td.sticky-col-1,
+.payments-data-table tbody tr.student-dropped:nth-child(even) td.sticky-col-2 {
+    background: #ffeaea !important;
 }
 
 .payments-data-table tbody tr {

@@ -446,14 +446,16 @@ class PaymentsManager {
                         <table class="payments-data-table">
                             <thead>
                                 <tr>
-                                    <th>ALUMNO</th>
-                                    <th>ID</th>
+                                    <th class="sticky-col-1">ALUMNO</th>
+                                    <th class="sticky-col-2">ID</th>
                                     <th>MATRICULA</th>
+                                    <th>FECHA MATRÍCULA</th>
                                     <th>N</th>
                                     <th>ESTADO</th>
                                     ${subjects.map(subject => `
                                         <th>${subject.label}</th>
                                         <th>Pagado</th>
+                                        <th>Notas</th>
                                     `).join('')}
                                 </tr>
                             </thead>
@@ -512,8 +514,10 @@ class PaymentsManager {
                                             subjectKey = 'parasitarias';
                                         }
                                         // ATV-008 FARMACOLOGÍA
-                                        else if (courseCode.includes('atv-008') || courseName.includes('atv-008') || 
-                                                 courseName.includes('farmacol') || courseName.includes('farmacología')) {
+                                        else if (courseCode.includes('atv-008') || courseCode.includes('atv008') || 
+                                                 courseName.includes('atv-008') || courseName.includes('atv008') || 
+                                                 courseName.includes('farmacol') || courseName.includes('farmacología') ||
+                                                 courseName.includes('farmacologia')) {
                                             subjectKey = 'farmacologia';
                                         }
                                         // ATV-009 LABORATORIO CLÍNICO
@@ -591,6 +595,50 @@ class PaymentsManager {
                                         (studentPayments[0].amount || 50000) : 50000;
                                     const matricula = `₡${matriculaAmount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
                                     
+                                    // Buscar fecha de pago de matrícula (primer pago con fecha o fecha más antigua)
+                                    let matriculaDate = '';
+                                    if (studentPayments.length > 0) {
+                                        // Ordenar pagos por fecha (más antiguo primero)
+                                        const sortedByDate = studentPayments
+                                            .filter(p => p.paymentDate)
+                                            .sort((a, b) => {
+                                                const dateA = a.paymentDate || '0';
+                                                const dateB = b.paymentDate || '0';
+                                                return dateA.localeCompare(dateB);
+                                            });
+                                        
+                                        if (sortedByDate.length > 0) {
+                                            // Usar la fecha más antigua como fecha de matrícula
+                                            const dateStr = sortedByDate[0].paymentDate;
+                                            const [year, month, day] = dateStr.split('-').map(Number);
+                                            const date = new Date(year, month - 1, day);
+                                            const dayNum = date.getDate();
+                                            const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+                                            const monthName = monthNames[date.getMonth()];
+                                            const yearShort = date.getFullYear().toString().slice(-2);
+                                            matriculaDate = `${dayNum} ${monthName} ${yearShort}`;
+                                        } else {
+                                            // Si no hay fecha de pago, usar fecha de creación del primer pago
+                                            const sortedByCreated = studentPayments
+                                                .filter(p => p.createdAt)
+                                                .sort((a, b) => {
+                                                    const dateA = a.createdAt || '0';
+                                                    const dateB = b.createdAt || '0';
+                                                    return dateA.localeCompare(dateB);
+                                                });
+                                            
+                                            if (sortedByCreated.length > 0) {
+                                                const createdAt = sortedByCreated[0].createdAt;
+                                                const date = new Date(createdAt);
+                                                const dayNum = date.getDate();
+                                                const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+                                                const monthName = monthNames[date.getMonth()];
+                                                const yearShort = date.getFullYear().toString().slice(-2);
+                                                matriculaDate = `${dayNum} ${monthName} ${yearShort}`;
+                                            }
+                                        }
+                                    }
+                                    
                                     // Determinar si el estudiante abandonó
                                     const studentData = this.students[student.id];
                                     const studentStatus = studentData?.status || student.status || 'active';
@@ -599,9 +647,12 @@ class PaymentsManager {
                                     
                                     return `
                                         <tr class="${rowClass}">
-                                            <td>${student.name}${isDropped ? ' <span style="color: #dc3545; font-size: 10px;">(Abandonó)</span>' : ''}</td>
-                                            <td>${student.cedula || student.id}</td>
+                                            <td class="sticky-col-1">${student.name}${isDropped ? ' <span style="color: #dc3545; font-size: 10px;">(Abandonó)</span>' : ''}</td>
+                                            <td class="sticky-col-2">${student.cedula || student.id}</td>
                                             <td>${matricula}</td>
+                                            <td style="text-align: center; font-size: 11px; color: ${matriculaDate ? '#155724' : '#999'}; font-weight: ${matriculaDate ? '600' : '400'};">
+                                                ${matriculaDate || '<span style="color: #999; font-size: 11px;">-</span>'}
+                                            </td>
                                             <td class="checkbox-cell">
                                                 <input type="checkbox" ${studentPayments.length > 0 ? 'checked' : ''}>
                     </td>
@@ -614,13 +665,18 @@ class PaymentsManager {
                                             </td>
                                             ${subjects.map(subject => {
                                                 const subjectPayments = paymentsBySubject[subject.key] || [];
-                                                const latestPayment = subjectPayments.sort((a, b) => {
-                                                    // Comparar fechas sin problemas de zona horaria
+                                                
+                                                // Ordenar pagos por fecha (más antiguo primero para que Intento 1 sea el primero)
+                                                const sortedPayments = subjectPayments.sort((a, b) => {
                                                     const dateA = a.paymentDate || a.createdAt || '0';
                                                     const dateB = b.paymentDate || b.createdAt || '0';
-                                                    return dateB.localeCompare(dateA); // Comparación de strings YYYY-MM-DD
-                                                })[0];
+                                                    return dateA.localeCompare(dateB); // Orden ascendente (más antiguo primero)
+                                                });
                                                 
+                                                // Obtener el último pago para la celda de fecha (el más reciente)
+                                                const latestPayment = sortedPayments.length > 0 ? sortedPayments[sortedPayments.length - 1] : null;
+                                                
+                                                // Generar contenido mostrando todos los intentos
                                                 let cellContent = '';
                                                 let cellClass = '';
                                                 let isChecked = false;
@@ -628,42 +684,79 @@ class PaymentsManager {
                                                 let paymentId = '';
                                                 let currentDate = '';
                                                 
-                                                if (latestPayment) {
-                                                    paymentId = Object.keys(paymentsToShow).find(id => paymentsToShow[id] === latestPayment) || '';
-                                                    
-                                                    if (latestPayment.paymentDate) {
-                                                        // Parsear fecha sin problemas de zona horaria
-                                                        const dateStr = latestPayment.paymentDate;
-                                                        const [year, month, day] = dateStr.split('-').map(Number);
-                                                        const date = new Date(year, month - 1, day); // Usar constructor local
-                                                        const dayNum = date.getDate();
-                                                        const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
-                                                        const monthName = monthNames[date.getMonth()];
-                                                        const yearShort = date.getFullYear().toString().slice(-2);
-                                                        cellContent = `${dayNum} ${monthName} ${yearShort}`;
-                                                        cellClass = 'date-cell editable-date-cell';
-                                                        isChecked = true;
-                                                        currentDate = latestPayment.paymentDate;
-                                                        // Mostrar monto pagado
-                                                        if (latestPayment.amount) {
-                                                            paidAmount = `₡${latestPayment.amount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                                                if (sortedPayments.length > 0) {
+                                                    // Construir lista de todos los intentos
+                                                    const attemptsHtml = sortedPayments.map((payment, index) => {
+                                                        const attemptNumber = index + 1;
+                                                        const attemptBadge = sortedPayments.length > 1 
+                                                            ? `<span style="font-size: 9px; color: #721c24; font-weight: 700; background: #f8d7da; padding: 1px 4px; border-radius: 3px; border: 1px solid #f5c6cb; margin-right: 4px;">Intento ${attemptNumber}</span>`
+                                                            : '';
+                                                        
+                                                        let paymentInfo = '';
+                                                        
+                                                        if (payment.paymentDate) {
+                                                            // Parsear fecha
+                                                            const dateStr = payment.paymentDate;
+                                                            const [year, month, day] = dateStr.split('-').map(Number);
+                                                            const date = new Date(year, month - 1, day);
+                                                            const dayNum = date.getDate();
+                                                            const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+                                                            const monthName = monthNames[date.getMonth()];
+                                                            const yearShort = date.getFullYear().toString().slice(-2);
+                                                            paymentInfo = `${dayNum} ${monthName} ${yearShort}`;
+                                                        } else if (payment.status === 'congela' || payment.notes?.toLowerCase().includes('congela')) {
+                                                            paymentInfo = 'CONGELA';
+                                                        } else if (payment.status === 'overdue') {
+                                                            paymentInfo = 'ATRASADO';
+                                                        } else if (payment.notes) {
+                                                            paymentInfo = payment.notes.substring(0, 20);
+                                                        } else {
+                                                            paymentInfo = 'Sin fecha';
                                                         }
-                                                    } else if (latestPayment.status === 'congela' || latestPayment.notes?.toLowerCase().includes('congela')) {
-                                                        cellContent = 'CONGELA';
-                                                        cellClass = 'status-cell congela';
-                                                    } else if (latestPayment.status === 'overdue') {
-                                                        cellContent = 'ATRASADO';
-                                                        cellClass = 'status-cell atrasado';
-                                                    } else if (latestPayment.notes) {
-                                                        cellContent = latestPayment.notes.substring(0, 30);
-                                                        cellClass = 'status-cell note';
+                                                        
+                                                        return `<div style="margin-bottom: 3px; font-size: 11px;">${attemptBadge}${paymentInfo}</div>`;
+                                                    }).join('');
+                                                    
+                                                    cellContent = attemptsHtml;
+                                                    
+                                                    // Configurar para el último pago (el más reciente)
+                                                    if (latestPayment) {
+                                                        paymentId = Object.keys(paymentsToShow).find(id => paymentsToShow[id] === latestPayment) || '';
+                                                        
+                                                        if (latestPayment.paymentDate) {
+                                                            cellClass = 'date-cell editable-date-cell';
+                                                            isChecked = true;
+                                                            currentDate = latestPayment.paymentDate;
+                                                            if (latestPayment.amount) {
+                                                                paidAmount = `₡${latestPayment.amount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                                                            }
+                                                        } else if (latestPayment.status === 'congela' || latestPayment.notes?.toLowerCase().includes('congela')) {
+                                                            cellClass = 'status-cell congela';
+                                                        } else if (latestPayment.status === 'overdue') {
+                                                            cellClass = 'status-cell atrasado';
+                                                        } else {
+                                                            cellClass = 'status-cell note';
+                                                        }
                                                     }
-                                                }
-                                                
-                                                // Si no hay pago, crear una celda editable vacía
-                                                if (!latestPayment) {
+                                                } else {
+                                                    // Si no hay pago, crear una celda editable vacía
                                                     cellClass = 'editable-date-cell empty-date-cell';
                                                 }
+                                                
+                                                // Obtener notas de todos los pagos
+                                                const allNotes = sortedPayments
+                                                    .map((p, idx) => {
+                                                        if (p.notes && p.notes.trim() && !p.notes.toLowerCase().includes('pago de') && !p.notes.toLowerCase().includes('estado:')) {
+                                                            const noteText = p.notes.trim();
+                                                            return sortedPayments.length > 1 
+                                                                ? `<div style="margin-bottom: 2px; font-size: 9px;"><strong>Intento ${idx + 1}:</strong> ${noteText}</div>`
+                                                                : `<div style="font-size: 10px;">${noteText}</div>`;
+                                                        }
+                                                        return null;
+                                                    })
+                                                    .filter(n => n !== null);
+                                                
+                                                const notesContent = allNotes.length > 0 ? allNotes.join('') : '';
                                                 
                                                 return `
                                                     <td class="${cellClass}" 
@@ -673,12 +766,20 @@ class PaymentsManager {
                                                         data-payment-id="${paymentId}"
                                                         data-current-date="${currentDate}"
                                                         onclick="window.paymentsManager.editSubjectDate(this)"
-                                                        style="cursor: pointer; position: relative;">
+                                                        style="cursor: pointer; position: relative; vertical-align: top; padding: 8px;">
                                                         ${cellContent || '<span style="color: #999; font-size: 11px;">Click para agregar</span>'}
                                                         ${cellContent ? `<input type="date" class="date-input-hidden" value="${currentDate}" style="display: none;">` : `<input type="date" class="date-input-hidden" style="display: none;">`}
                                                     </td>
-                                                    <td class="checkbox-cell paid-amount-cell">
+                                                    <td class="checkbox-cell paid-amount-cell" style="vertical-align: top;">
                                                         ${isChecked ? `<input type="checkbox" checked><br><small style="font-size: 10px; color: #28a745; font-weight: 600;">${paidAmount}</small>` : '<input type="checkbox">'}
+                                                    </td>
+                                                    <td class="notes-cell editable-notes-cell" 
+                                                        data-student-id="${student.id}" 
+                                                        data-subject-key="${subject.key}"
+                                                        data-subject-code="${subject.code}"
+                                                        onclick="window.paymentsManager.editSubjectNotes(this)"
+                                                        style="cursor: pointer; position: relative; vertical-align: top; padding: 8px; min-width: 120px; max-width: 200px;">
+                                                        ${notesContent ? `<div style="font-size: 10px; color: #495057; white-space: pre-wrap; word-wrap: break-word;">${notesContent}</div>` : '<span style="color: #999; font-size: 11px;">Click para agregar</span>'}
                                                     </td>
                                                 `;
                                             }).join('')}
@@ -1889,6 +1990,168 @@ class PaymentsManager {
         };
         
         return subjectLabels[subjectKey] || subjectKey;
+    }
+
+    async editSubjectNotes(cell) {
+        const studentId = cell.dataset.studentId;
+        const subjectKey = cell.dataset.subjectKey;
+        const subjectCode = cell.dataset.subjectCode;
+        
+        // Obtener todos los pagos de este estudiante para esta materia
+        const subjectPayments = Object.entries(this.payments).filter(([id, payment]) => 
+            payment.studentId === studentId && 
+            payment.course && (
+                payment.course.toLowerCase().includes(subjectKey.toLowerCase()) ||
+                (payment.courseCode && payment.courseCode.toLowerCase().includes(subjectCode.toLowerCase()))
+            )
+        );
+        
+        // Ordenar pagos por fecha (más antiguo primero)
+        const sortedPayments = subjectPayments.sort(([idA, paymentA], [idB, paymentB]) => {
+            const dateA = paymentA.paymentDate || paymentA.createdAt || '0';
+            const dateB = paymentB.paymentDate || paymentB.createdAt || '0';
+            return dateA.localeCompare(dateB);
+        });
+        
+        // Obtener notas actuales (solo las notas reales, no las automáticas)
+        const currentNotes = cell.textContent.trim().replace(/Click para agregar/g, '').trim();
+        const originalContent = cell.innerHTML;
+        
+        // Crear textarea para editar notas
+        const notesTextarea = document.createElement('textarea');
+        notesTextarea.className = 'notes-input-visible';
+        notesTextarea.style.cssText = 'width: 100%; min-height: 80px; padding: 8px; border: 2px solid #3b82f6; border-radius: 4px; font-size: 11px; resize: vertical; font-family: inherit;';
+        
+        // Si hay múltiples pagos, mostrar opción para editar cada uno
+        if (sortedPayments.length > 1) {
+            const notesByAttempt = sortedPayments.map(([id, payment], idx) => {
+                const note = payment.notes && !payment.notes.toLowerCase().includes('pago de') && !payment.notes.toLowerCase().includes('estado:')
+                    ? payment.notes.trim()
+                    : '';
+                return `Intento ${idx + 1}: ${note || '(sin notas)'}`;
+            }).join('\n\n');
+            notesTextarea.value = notesByAttempt;
+        } else {
+            // Si hay un solo pago o ninguno, mostrar solo las notas
+            const cleanNotes = currentNotes.replace(/Intento \d+:/g, '').trim();
+            notesTextarea.value = cleanNotes;
+        }
+        
+        notesTextarea.placeholder = 'Ingrese notas para esta materia...\n\nSi hay múltiples intentos, puede agregar notas para cada uno.';
+        
+        // Reemplazar contenido de la celda temporalmente
+        cell.innerHTML = '';
+        cell.appendChild(notesTextarea);
+        notesTextarea.focus();
+        notesTextarea.select();
+        
+        const saveNotes = async () => {
+            const notesText = notesTextarea.value.trim();
+            
+            if (!notesText) {
+                cell.innerHTML = originalContent;
+                return;
+            }
+            
+            try {
+                if (sortedPayments.length > 0) {
+                    // Si hay múltiples pagos, intentar distribuir las notas
+                    if (sortedPayments.length > 1 && notesText.includes('Intento')) {
+                        // Parsear notas por intento
+                        const notesByAttempt = notesText.split(/\n\n|\n(?=Intento \d+:)/);
+                        
+                        notesByAttempt.forEach((noteBlock, idx) => {
+                            if (idx < sortedPayments.length) {
+                                const [paymentId, payment] = sortedPayments[idx];
+                                const noteMatch = noteBlock.match(/Intento \d+:\s*(.*)/s);
+                                const cleanNote = noteMatch ? noteMatch[1].trim() : noteBlock.replace(/Intento \d+:/g, '').trim();
+                                
+                                if (cleanNote && cleanNote !== '(sin notas)') {
+                                    const paymentRef = ref(db, `payments/${paymentId}`);
+                                    set(paymentRef, {
+                                        ...payment,
+                                        notes: cleanNote,
+                                        updatedAt: new Date().toISOString()
+                                    });
+                                }
+                            }
+                        });
+                    } else {
+                        // Actualizar solo el último pago con las notas
+                        const [paymentId, payment] = sortedPayments[sortedPayments.length - 1];
+                        const paymentRef = ref(db, `payments/${paymentId}`);
+                        await set(paymentRef, {
+                            ...payment,
+                            notes: notesText,
+                            updatedAt: new Date().toISOString()
+                        });
+                    }
+                } else {
+                    // Si no hay pagos, crear uno nuevo solo con notas
+                    const student = this.students[studentId];
+                    if (!student) {
+                        console.error('Estudiante no encontrado');
+                        cell.innerHTML = originalContent;
+                        return;
+                    }
+                    
+                    const courseName = this.getCourseNameForSubject(subjectCode, subjectKey);
+                    const course = Object.values(this.courses).find(c => 
+                        c.name && (c.name.toLowerCase().includes(subjectKey.toLowerCase()) || 
+                                   c.code === subjectCode)
+                    );
+                    
+                    const paymentData = {
+                        studentId: studentId,
+                        studentName: `${student.firstName} ${student.lastName}`,
+                        studentCedula: student.cedula || '',
+                        group: student.group || '',
+                        course: courseName,
+                        courseCode: subjectCode,
+                        month: new Date().toISOString().slice(0, 7),
+                        amount: course ? course.price : 0,
+                        status: 'pending',
+                        paymentDate: null,
+                        paymentMethod: null,
+                        notes: notesText,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    const paymentsRef = ref(db, 'payments');
+                    await push(paymentsRef, paymentData);
+                }
+                
+                // Recargar pagos y renderizar
+                await this.loadPayments();
+                this.renderPaymentsTable();
+                
+                if (window.app) {
+                    window.app.showNotification('Notas guardadas correctamente', 'success');
+                }
+            } catch (error) {
+                console.error('Error al guardar notas:', error);
+                cell.innerHTML = originalContent;
+                if (window.app) {
+                    window.app.showNotification('Error al guardar las notas', 'error');
+                }
+            }
+        };
+        
+        const cancelEdit = () => {
+            cell.innerHTML = originalContent;
+        };
+        
+        notesTextarea.addEventListener('blur', saveNotes);
+        notesTextarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                saveNotes();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+            }
+        });
     }
 
     async editStudentStatus(cell) {
