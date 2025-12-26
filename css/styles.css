@@ -3337,6 +3337,19 @@ a[data-section="cronograma"] {
     color: var(--text-primary);
 }
 
+/* Estilo para nombres de estudiantes clickeables */
+.payments-data-table .student-name-filter {
+    transition: all 0.2s ease;
+    display: inline-block;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.payments-data-table .student-name-filter:hover {
+    background-color: rgba(59, 130, 246, 0.1);
+    transform: scale(1.02);
+}
+
 /* Columnas fijas (sticky) - Solo ALUMNO e ID */
 .payments-data-table th.sticky-col-1,
 .payments-data-table td.sticky-col-1 {

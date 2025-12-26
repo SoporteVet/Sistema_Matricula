@@ -77,6 +77,7 @@ class PaymentsManager {
         if (paymentsTab) {
             paymentsTab.addEventListener('change', (e) => {
                 if (e.target.id === 'paymentGroupFilter' || 
+                    e.target.id === 'paymentStudentFilter' ||
                     e.target.id === 'paymentStatusFilter' || 
                     e.target.id === 'paymentMonthFilter') {
                 this.applyFilters();
@@ -171,6 +172,7 @@ class PaymentsManager {
             if (studentsSnapshot.exists()) {
                 this.students = studentsSnapshot.val();
                 this.updatePaymentGroupFilter();
+                this.updatePaymentStudentFilter();
                 console.log('Estudiantes cargados:', Object.keys(this.students).length);
             } else {
                 console.warn('No se encontraron estudiantes en la base de datos');
@@ -257,6 +259,27 @@ class PaymentsManager {
             `).join('');
     }
 
+    updatePaymentStudentFilter() {
+        const paymentStudentFilter = document.getElementById('paymentStudentFilter');
+        
+        if (!paymentStudentFilter) return;
+
+        // Obtener todos los estudiantes, ordenados por nombre
+        const studentsList = Object.entries(this.students || {})
+            .map(([id, student]) => ({
+                id,
+                name: `${student.firstName} ${student.lastName}`,
+                cedula: student.cedula || '',
+                group: student.group || ''
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        paymentStudentFilter.innerHTML = '<option value="">Todos los estudiantes</option>' +
+            studentsList.map(student => `
+                <option value="${student.id}">${student.name}${student.cedula ? ` - ${student.cedula}` : ''}${student.group ? ` (${student.group})` : ''}</option>
+            `).join('');
+    }
+
     getGroupLabel(groupValue) {
         if (!groupValue) {
             return '-';
@@ -278,8 +301,33 @@ class PaymentsManager {
         return groupValue;
     }
 
+    filterByStudent(studentId) {
+        // Si ya está filtrado por este estudiante, quitar el filtro
+        if (this.currentFilters?.studentFilter === studentId) {
+            this.currentFilters.studentFilter = '';
+            // También limpiar el selector si existe
+            const paymentStudentFilter = document.getElementById('paymentStudentFilter');
+            if (paymentStudentFilter) {
+                paymentStudentFilter.value = '';
+            }
+        } else {
+            // Filtrar por este estudiante
+            this.currentFilters = this.currentFilters || {};
+            this.currentFilters.studentFilter = studentId;
+            // También actualizar el selector si existe
+            const paymentStudentFilter = document.getElementById('paymentStudentFilter');
+            if (paymentStudentFilter) {
+                paymentStudentFilter.value = studentId;
+            }
+        }
+        
+        // Aplicar filtros
+        this.applyFilters();
+    }
+
     applyFilters() {
         const groupFilter = document.getElementById('paymentGroupFilter')?.value || '';
+        const studentFilter = document.getElementById('paymentStudentFilter')?.value || this.currentFilters?.studentFilter || '';
         const courseFilter = document.getElementById('paymentCourseFilter')?.value || '';
         const statusFilter = document.getElementById('paymentStatusFilter')?.value || '';
         const monthFilter = document.getElementById('paymentMonthFilter')?.value || '';
@@ -288,6 +336,7 @@ class PaymentsManager {
         this.filteredPayments = Object.fromEntries(
             Object.entries(this.payments).filter(([id, payment]) => {
                 const matchesGroup = !groupFilter || payment.group === groupFilter;
+                const matchesStudentFilter = !studentFilter || payment.studentId === studentFilter;
                 const matchesCourse = !courseFilter || payment.course === courseFilter;
                 const matchesStatus = !statusFilter || payment.status === statusFilter;
                 const matchesMonth = !monthFilter || payment.month === monthFilter;
@@ -295,13 +344,14 @@ class PaymentsManager {
                     (payment.studentName && payment.studentName.toLowerCase().includes(studentSearch)) ||
                     (payment.studentCedula && payment.studentCedula.toString().includes(studentSearch));
                 
-                return matchesGroup && matchesCourse && matchesStatus && matchesMonth && matchesStudent;
+                return matchesGroup && matchesStudentFilter && matchesCourse && matchesStatus && matchesMonth && matchesStudent;
             })
         );
 
         // Guardar filtros para usar en renderPaymentsTable
         this.currentFilters = {
             groupFilter,
+            studentFilter,
             statusFilter,
             studentSearch
         };
@@ -349,6 +399,7 @@ class PaymentsManager {
 
         // Aplicar filtros a estudiantes
         const groupFilter = this.currentFilters?.groupFilter || '';
+        const studentFilter = this.currentFilters?.studentFilter || '';
         const studentSearch = this.currentFilters?.studentSearch || '';
 
         // Primero, obtener todos los estudiantes activos
@@ -365,6 +416,9 @@ class PaymentsManager {
             Object.entries(this.students).forEach(([studentId, student]) => {
                 // Mostrar todos los estudiantes, sin importar su estado
                 // if (student.status !== 'active') return; // REMOVIDO - mostrar todos
+                
+                // Aplicar filtro de estudiante específico
+                if (studentFilter && studentId !== studentFilter) return;
                 
                 // Aplicar filtro de grupo
                 const studentGroup = student.group || 'Sin grupo';
@@ -645,9 +699,22 @@ class PaymentsManager {
                                     const isDropped = studentStatus === 'dropped' || studentStatus === 'inactive';
                                     const rowClass = isDropped ? 'student-dropped' : '';
                                     
+                                    // Verificar si este estudiante está filtrado
+                                    const isFiltered = this.currentFilters?.studentFilter === student.id;
+                                    
                                     return `
                                         <tr class="${rowClass}">
-                                            <td class="sticky-col-1">${student.name}${isDropped ? ' <span style="color: #dc3545; font-size: 10px;">(Abandonó)</span>' : ''}</td>
+                                            <td class="sticky-col-1">
+                                                <span class="student-name-filter" 
+                                                      data-student-id="${student.id}" 
+                                                      style="cursor: pointer; color: ${isFiltered ? '#3b82f6' : 'inherit'}; font-weight: ${isFiltered ? '700' : '600'}; text-decoration: ${isFiltered ? 'underline' : 'none'};"
+                                                      onclick="window.paymentsManager.filterByStudent('${student.id}')"
+                                                      title="${isFiltered ? 'Clic para quitar filtro' : 'Clic para filtrar solo este estudiante'}">
+                                                    ${student.name}
+                                                </span>
+                                                ${isDropped ? ' <span style="color: #dc3545; font-size: 10px;">(Abandonó)</span>' : ''}
+                                                ${isFiltered ? ' <i class="fas fa-filter" style="color: #3b82f6; font-size: 10px; margin-left: 5px;"></i>' : ''}
+                                            </td>
                                             <td class="sticky-col-2">${student.cedula || student.id}</td>
                                             <td>${matricula}</td>
                                             <td style="text-align: center; font-size: 11px; color: ${matriculaDate ? '#155724' : '#999'}; font-weight: ${matriculaDate ? '600' : '400'};">
@@ -1379,7 +1446,8 @@ class PaymentsManager {
     // Método para actualizar opciones de estudiantes (usado por el sistema de tiempo real)
     updateStudentOptions() {
         // Actualizar filtros y opciones que dependan de estudiantes
-        this.loadFilters();
+        this.updatePaymentGroupFilter();
+        this.updatePaymentStudentFilter();
         // También renderizar la tabla si estamos en la sección de pagos
         this.renderPaymentsTable();
     }
