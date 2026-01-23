@@ -2,14 +2,14 @@ import {
     ref, 
     get, 
     set, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { 
     createUserWithEmailAndPassword,
     deleteUser
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { auth, db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class UsersManager {
     constructor() {
@@ -39,16 +39,18 @@ class UsersManager {
     }
 
     setupRealTimeUpdates() {
-        const usersRef = ref(db, 'users');
-        onValue(usersRef, (snapshot) => {
-            if (snapshot.exists()) {
-                this.users = snapshot.val();
-                this.renderUsersTable();
-            } else {
-                this.users = {};
-                this.renderUsersTable();
-            }
+        // Suscribirse a actualizaciones en tiempo real de usuarios
+        this.unsubscribeUsers = realtimeManager.subscribe('users', (users) => {
+            this.users = users || {};
+            this.renderUsersTable();
         });
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeUsers) {
+            this.unsubscribeUsers();
+        }
     }
 
     async loadUsers() {

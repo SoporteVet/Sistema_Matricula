@@ -24,7 +24,7 @@ class RealtimeManager {
             return;
         }
         
-        console.log('Inicializando sistema de actualizaciones en tiempo real...');
+        console.log('🔄 Inicializando sistema de actualizaciones en tiempo real...');
         
         // Configurar escuchas para todas las entidades principales
         this.setupStudentsListener();
@@ -35,9 +35,14 @@ class RealtimeManager {
         this.setupUsersListener();
         this.setupAcademicHistoryListener();
         this.setupReportsListener();
+        this.setupCronogramaListener();
+        this.setupGradesListener();
         
         this.isInitialized = true;
-        console.log('Sistema de actualizaciones en tiempo real inicializado');
+        console.log('✅ Sistema de actualizaciones en tiempo real inicializado');
+        
+        // Limpiar contador de actualizaciones si existe
+        this.cleanupUpdateCounter();
         
         // Mostrar indicador de que el sistema está activo
         if (window.app) {
@@ -150,6 +155,33 @@ class RealtimeManager {
         this.listeners.set('reports', listener);
     }
 
+    // Configurar escucha para cronograma/eventos
+    setupCronogramaListener() {
+        const cronogramaRef = ref(db, 'cronograma_events');
+        const listener = onValue(cronogramaRef, (snapshot) => {
+            const events = snapshot.exists() ? snapshot.val() : {};
+            this.notifyListeners('cronograma_events', events);
+            
+            // Actualizar el cronograma si está disponible
+            if (window.cronogramaManager && window.cronogramaManager.initialized) {
+                window.cronogramaManager.loadEvents();
+            }
+        });
+        
+        this.listeners.set('cronograma_events', listener);
+    }
+
+    // Configurar escucha para notas/calificaciones
+    setupGradesListener() {
+        const gradesRef = ref(db, 'grades');
+        const listener = onValue(gradesRef, (snapshot) => {
+            const grades = snapshot.exists() ? snapshot.val() : {};
+            this.notifyListeners('grades', grades);
+        });
+        
+        this.listeners.set('grades', listener);
+    }
+
     // Registrar un callback para una entidad específica
     subscribe(entity, callback) {
         if (!this.callbacks.has(entity)) {
@@ -209,7 +241,9 @@ class RealtimeManager {
             'groups': 'Grupos',
             'users': 'Usuarios',
             'academicHistory': 'Historial Académico',
-            'reports': 'Reportes'
+            'reports': 'Reportes',
+            'cronograma_events': 'Cronograma',
+            'grades': 'Calificaciones'
         };
         
         const entityName = entityNames[entity] || entity;
@@ -223,7 +257,9 @@ class RealtimeManager {
             'groups': '#groupsTable',
             'users': '#usersTable',
             'academicHistory': '#academicHistoryTable',
-            'reports': '#reportsTable'
+            'reports': '#reportsTable',
+            'cronograma_events': '#eventsTable',
+            'grades': '#gradesTable'
         };
         
         const tableSelector = tableMap[entity];
@@ -256,19 +292,79 @@ class RealtimeManager {
             document.body.appendChild(indicator);
         }
         
-        // Actualizar texto
+        // Actualizar texto con icono de éxito
         const span = indicator.querySelector('span');
+        const icon = indicator.querySelector('i');
         if (span) {
             span.textContent = `${entityName} actualizado`;
+        }
+        if (icon) {
+            icon.className = 'fas fa-check-circle';
+            icon.style.color = '#10b981';
         }
         
         // Mostrar indicador
         indicator.classList.add('show');
         
-        // Ocultar después de 2 segundos
+        // Restaurar icono y ocultar después de 2 segundos
         setTimeout(() => {
             indicator.classList.remove('show');
+            if (icon) {
+                icon.className = 'fas fa-sync-alt';
+                icon.style.color = '';
+            }
         }, 2000);
+    }
+    
+    // Método para forzar actualización de todos los datos
+    async forceRefreshAll() {
+        console.log('🔄 Forzando actualización de todos los datos...');
+        
+        // Mostrar indicador de sincronización
+        this.showSyncIndicator('Sincronizando todos los datos...');
+        
+        // Reiniciar listeners para forzar recarga
+        this.stopAllListeners();
+        this.isInitialized = false;
+        this.init();
+        
+        // Ocultar indicador después de un momento
+        setTimeout(() => {
+            this.hideSyncIndicator();
+            if (window.app) {
+                window.app.showNotification('Datos sincronizados correctamente', 'success');
+            }
+        }, 2000);
+    }
+    
+    // Mostrar indicador de sincronización global
+    showSyncIndicator(message = 'Sincronizando...') {
+        let syncIndicator = document.getElementById('sync-indicator');
+        if (!syncIndicator) {
+            syncIndicator = document.createElement('div');
+            syncIndicator.id = 'sync-indicator';
+            syncIndicator.className = 'sync-indicator';
+            syncIndicator.innerHTML = `
+                <div class="sync-icon"><i class="fas fa-sync-alt fa-spin"></i></div>
+                <span class="sync-text">${message}</span>
+            `;
+            document.body.appendChild(syncIndicator);
+        }
+        
+        const textEl = syncIndicator.querySelector('.sync-text');
+        if (textEl) {
+            textEl.textContent = message;
+        }
+        
+        syncIndicator.classList.add('show');
+    }
+    
+    // Ocultar indicador de sincronización
+    hideSyncIndicator() {
+        const syncIndicator = document.getElementById('sync-indicator');
+        if (syncIndicator) {
+            syncIndicator.classList.remove('show');
+        }
     }
 
     // Obtener datos en tiempo real de una entidad específica
@@ -316,6 +412,14 @@ class RealtimeManager {
         return this.isInitialized && this.listeners.size > 0;
     }
 
+    // Limpiar contador de actualizaciones si existe
+    cleanupUpdateCounter() {
+        const counter = document.getElementById('update-counter');
+        if (counter) {
+            counter.remove();
+        }
+    }
+
     // Obtener estadísticas de listeners activos
     getStats() {
         return {
@@ -331,6 +435,20 @@ class RealtimeManager {
 
 // Crear instancia global
 const realtimeManager = new RealtimeManager();
+
+// Exponer globalmente para acceso desde consola y otros scripts
+window.realtimeManager = realtimeManager;
+
+// Agregar atajo de teclado para sincronización manual (Ctrl+Shift+R)
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        if (window.app) {
+            window.app.showNotification('Sincronizando datos...', 'info', 1500);
+        }
+        realtimeManager.forceRefreshAll();
+    }
+});
 
 // Exportar para uso en otros módulos
 export { realtimeManager, RealtimeManager };

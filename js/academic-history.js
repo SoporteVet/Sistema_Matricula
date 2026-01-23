@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class AcademicHistoryManager {
     constructor() {
@@ -56,20 +56,44 @@ class AcademicHistoryManager {
     }
 
     setupRealTimeUpdates() {
-        // Escuchar cambios en todas las colecciones relevantes
-        const collections = ['students', 'courses', 'groups', 'payments', 'attendance'];
-        
-        collections.forEach(collection => {
-            const collectionRef = ref(db, collection);
-            onValue(collectionRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    this[collection] = snapshot.val();
-                } else {
-                    this[collection] = {};
-                }
-                this.applyFilters();
-            });
+        // Suscribirse a actualizaciones en tiempo real de estudiantes
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.students = students || {};
+            this.applyFilters();
         });
+        
+        // Suscribirse a actualizaciones en tiempo real de cursos
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            this.courses = courses || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de grupos
+        this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
+            this.groups = groups || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de pagos
+        this.unsubscribePayments = realtimeManager.subscribe('payments', (payments) => {
+            this.payments = payments || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de asistencia
+        this.unsubscribeAttendance = realtimeManager.subscribe('attendance', (attendance) => {
+            this.attendance = attendance || {};
+            this.applyFilters();
+        });
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeStudents) this.unsubscribeStudents();
+        if (this.unsubscribeCourses) this.unsubscribeCourses();
+        if (this.unsubscribeGroups) this.unsubscribeGroups();
+        if (this.unsubscribePayments) this.unsubscribePayments();
+        if (this.unsubscribeAttendance) this.unsubscribeAttendance();
     }
 
     async loadAllData() {

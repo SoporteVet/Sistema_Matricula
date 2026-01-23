@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class AttendanceManager {
     constructor() {
@@ -440,22 +440,38 @@ class AttendanceManager {
     }
 
     setupRealTimeUpdates() {
-        const collections = ['attendance', 'students', 'courses', 'groups'];
-        
-        collections.forEach(collection => {
-            const collectionRef = ref(db, collection);
-            onValue(collectionRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    this[collection] = snapshot.val();
-                } else {
-                    this[collection] = {};
-                }
-                
-                if (collection === 'groups') {
-                    this.updateGroupFilter();
-                }
-            });
+        // Suscribirse a actualizaciones en tiempo real de asistencia
+        this.unsubscribeAttendance = realtimeManager.subscribe('attendance', (attendance) => {
+            this.attendance = attendance || {};
+            // Recargar la tabla si estamos visualizando
+            if (document.getElementById('attendanceTable') && this.currentStudentsForAttendance.length > 0) {
+                this.loadStudentsInTable();
+            }
         });
+        
+        // Suscribirse a actualizaciones de estudiantes
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.students = students || {};
+        });
+        
+        // Suscribirse a actualizaciones de cursos
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            this.courses = courses || {};
+        });
+        
+        // Suscribirse a actualizaciones de grupos
+        this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
+            this.groups = groups || {};
+            this.updateGroupFilter();
+        });
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeAttendance) this.unsubscribeAttendance();
+        if (this.unsubscribeStudents) this.unsubscribeStudents();
+        if (this.unsubscribeCourses) this.unsubscribeCourses();
+        if (this.unsubscribeGroups) this.unsubscribeGroups();
     }
 
     async loadAllData() {
@@ -1008,11 +1024,14 @@ class AttendanceManager {
     }
 }
 
-// Crear instancia global
+// Crear instancia global - Solo si existe la tabla de asistencia original (módulo separado)
+// NOTA: La funcionalidad principal de asistencia ahora está integrada en grades.js
 document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('attendanceTable')) {
+    // Solo inicializar si existe la tabla de asistencia del módulo separado
+    // (esto es para compatibilidad, pero el módulo principal está en grades.js)
+    const attendanceTable = document.getElementById('attendanceTable');
+    if (attendanceTable) {
         window.attendanceManager = new AttendanceManager();
-        // No inicializar automáticamente, esperar a que la app esté lista
     }
 });
 

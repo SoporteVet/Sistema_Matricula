@@ -649,11 +649,45 @@ class PaymentsManager {
                                         (studentPayments[0].amount || 50000) : 50000;
                                     const matricula = `₡${matriculaAmount.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
                                     
-                                    // Buscar fecha de pago de matrícula (primer pago con fecha o fecha más antigua)
+                                    // Buscar fecha de pago de matrícula (excluir pagos de materias específicas)
                                     let matriculaDate = '';
                                     if (studentPayments.length > 0) {
+                                        // Función auxiliar para determinar si un pago es de una materia específica
+                                        const isSubjectPayment = (payment) => {
+                                            const courseName = (payment.course || '').toLowerCase().trim();
+                                            const courseCode = (payment.courseCode || '').toLowerCase().trim();
+                                            
+                                            // Lista de materias específicas a excluir
+                                            const subjectPatterns = [
+                                                'atv-001', 'anatom', 'anatomía',
+                                                'atv-002', 'zootecn', 'zootecnia', 'nutricion', 'nutrición',
+                                                'atv-003', 'fisiol', 'fisiología',
+                                                'atv-004', 'patol', 'patología',
+                                                'atv-005', 'terminol', 'terminología', 'etica', 'ética', 'profesional',
+                                                'atv-006', 'infeccios', 'infecciosa',
+                                                'atv-007', 'parasit', 'parasitaria', 'parasitología',
+                                                'atv-008', 'atv008', 'farmacol', 'farmacología', 'farmacologia',
+                                                'atv-009', 'laboratorio', 'lab', 'clínico', 'clinico',
+                                                'atv-010', 'consulta', 'externa',
+                                                'atv-011', 'medicina', 'interna',
+                                                'atv-012', 'quirofano', 'quirófano',
+                                                'atv-013', 'proyecto', 'final',
+                                                'gira', 'gabacha', 'kit', 'básico', 'basico'
+                                            ];
+                                            
+                                            return subjectPatterns.some(pattern => 
+                                                courseCode.includes(pattern) || courseName.includes(pattern)
+                                            );
+                                        };
+                                        
+                                        // Filtrar pagos que NO sean de materias específicas (pagos de matrícula)
+                                        const matriculaPayments = studentPayments.filter(p => !isSubjectPayment(p));
+                                        
+                                        // Si no hay pagos de matrícula específicos, usar todos los pagos
+                                        const paymentsToCheck = matriculaPayments.length > 0 ? matriculaPayments : studentPayments;
+                                        
                                         // Ordenar pagos por fecha (más antiguo primero)
-                                        const sortedByDate = studentPayments
+                                        const sortedByDate = paymentsToCheck
                                             .filter(p => p.paymentDate)
                                             .sort((a, b) => {
                                                 const dateA = a.paymentDate || '0';
@@ -673,7 +707,7 @@ class PaymentsManager {
                                             matriculaDate = `${dayNum} ${monthName} ${yearShort}`;
                                         } else {
                                             // Si no hay fecha de pago, usar fecha de creación del primer pago
-                                            const sortedByCreated = studentPayments
+                                            const sortedByCreated = paymentsToCheck
                                                 .filter(p => p.createdAt)
                                                 .sort((a, b) => {
                                                     const dateA = a.createdAt || '0';
@@ -702,6 +736,24 @@ class PaymentsManager {
                                     // Verificar si este estudiante está filtrado
                                     const isFiltered = this.currentFilters?.studentFilter === student.id;
                                     
+                                    // Obtener fecha de matrícula desde enrollmentDate del estudiante
+                                    let matriculaDateDisplay = '';
+                                    let matriculaDateValue = '';
+                                    if (studentData && studentData.enrollmentDate) {
+                                        matriculaDateValue = studentData.enrollmentDate;
+                                        const date = new Date(studentData.enrollmentDate);
+                                        if (!isNaN(date.getTime())) {
+                                            const dayNum = date.getDate();
+                                            const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+                                            const monthName = monthNames[date.getMonth()];
+                                            const yearShort = date.getFullYear().toString().slice(-2);
+                                            matriculaDateDisplay = `${dayNum} ${monthName} ${yearShort}`;
+                                        }
+                                    } else if (matriculaDate) {
+                                        // Si no hay enrollmentDate, usar la fecha calculada como fallback
+                                        matriculaDateDisplay = matriculaDate;
+                                    }
+                                    
                                     return `
                                         <tr class="${rowClass}">
                                             <td class="sticky-col-1">
@@ -717,8 +769,13 @@ class PaymentsManager {
                                             </td>
                                             <td class="sticky-col-2">${student.cedula || student.id}</td>
                                             <td>${matricula}</td>
-                                            <td style="text-align: center; font-size: 11px; color: ${matriculaDate ? '#155724' : '#999'}; font-weight: ${matriculaDate ? '600' : '400'};">
-                                                ${matriculaDate || '<span style="color: #999; font-size: 11px;">-</span>'}
+                                            <td class="editable-matricula-date-cell" 
+                                                data-student-id="${student.id}"
+                                                data-current-date="${matriculaDateValue || ''}"
+                                                onclick="window.paymentsManager.editMatriculaDate(this)"
+                                                style="text-align: center; font-size: 11px; color: ${matriculaDateDisplay ? '#155724' : '#999'}; font-weight: ${matriculaDateDisplay ? '600' : '400'}; cursor: pointer; padding: 4px;"
+                                                title="Clic para editar fecha de matrícula">
+                                                ${matriculaDateDisplay || '<span style="color: #999; font-size: 11px;">-</span>'}
                                             </td>
                                             <td class="checkbox-cell">
                                                 <input type="checkbox" ${studentPayments.length > 0 ? 'checked' : ''}>
@@ -1201,9 +1258,15 @@ class PaymentsManager {
             (paymentId ? this.payments?.[paymentId]?.group : null) || 
             null;
         
+        // Obtener nombre completo del estudiante directamente desde los datos
+        const studentData = this.students?.[studentSelect.value];
+        const studentName = studentData ? 
+            `${studentData.firstName} ${studentData.lastName}` : 
+            (selectedStudent.text.split(' - ')[0] || 'Estudiante desconocido');
+        
         const paymentData = {
             studentId: studentSelect.value,
-            studentName: selectedStudent.text.split(' - ')[0],
+            studentName: studentName,
             studentCedula: selectedCedula,
             group: selectedGroup,
             course: document.getElementById('paymentCourse').value,
@@ -1989,6 +2052,83 @@ class PaymentsManager {
                 cell.innerHTML = originalContent;
                 if (window.app) {
                     window.app.showNotification('Error al guardar la fecha', 'error');
+                }
+            }
+        };
+        
+        const cancelEdit = () => {
+            cell.innerHTML = originalContent;
+        };
+        
+        dateInput.addEventListener('blur', saveDate);
+        dateInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveDate();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+            }
+        });
+    }
+
+    async editMatriculaDate(cell) {
+        const studentId = cell.dataset.studentId;
+        const currentDate = cell.dataset.currentDate;
+        
+        // Verificar que el estudiante existe
+        const student = this.students[studentId];
+        if (!student) {
+            if (window.app) {
+                window.app.showNotification('Estudiante no encontrado', 'error');
+            }
+            return;
+        }
+        
+        // Crear input de fecha
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'date-input-visible';
+        dateInput.style.cssText = 'width: 100%; padding: 4px; border: 2px solid #3b82f6; border-radius: 4px; font-size: 12px;';
+        if (currentDate) {
+            dateInput.value = currentDate;
+        }
+        
+        // Reemplazar contenido de la celda temporalmente
+        const originalContent = cell.innerHTML;
+        cell.innerHTML = '';
+        cell.appendChild(dateInput);
+        dateInput.focus();
+        dateInput.select();
+        
+        const saveDate = async () => {
+            const selectedDate = dateInput.value;
+            if (!selectedDate) {
+                cell.innerHTML = originalContent;
+                return;
+            }
+            
+            try {
+                // Actualizar el campo enrollmentDate del estudiante
+                const studentRef = ref(db, `students/${studentId}`);
+                const currentStudentData = { ...student };
+                currentStudentData.enrollmentDate = selectedDate;
+                currentStudentData.updatedAt = new Date().toISOString();
+                
+                await set(studentRef, currentStudentData);
+                
+                // Recargar estudiantes y renderizar tabla
+                await this.loadFilters();
+                this.renderPaymentsTable();
+                
+                if (window.app) {
+                    window.app.showNotification('Fecha de matrícula guardada correctamente', 'success');
+                }
+            } catch (error) {
+                console.error('Error al guardar fecha de matrícula:', error);
+                cell.innerHTML = originalContent;
+                if (window.app) {
+                    window.app.showNotification('Error al guardar la fecha de matrícula', 'error');
                 }
             }
         };

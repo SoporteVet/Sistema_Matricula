@@ -222,9 +222,12 @@ class StudentsManager {
         this.filteredStudents = Object.fromEntries(
             Object.entries(this.students).filter(([id, student]) => {
                 const matchesGroup = !groupFilter || student.group === groupFilter;
+                // Obtener nombre completo (puede venir como fullName o firstName + lastName)
+                const fullName = student.fullName || 
+                    (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : 
+                    (student.firstName || student.lastName || ''));
                 const matchesSearch = !searchText || 
-                    student.firstName.toLowerCase().includes(searchText) ||
-                    student.lastName.toLowerCase().includes(searchText) ||
+                    fullName.toLowerCase().includes(searchText) ||
                     student.email.toLowerCase().includes(searchText) ||
                     student.studentId.toLowerCase().includes(searchText) ||
                     (student.group && student.group.toLowerCase().includes(searchText));
@@ -268,7 +271,7 @@ class StudentsManager {
                         <small style="color: #666;">Grupo: ${student.group || 'N/A'}</small>
                     </td>
                     <td>${student.cedula || 'N/A'}</td>
-                    <td>${student.firstName} ${student.lastName}</td>
+                    <td>${student.fullName || (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : (student.firstName || student.lastName || 'N/A'))}</td>
                     <td>${student.email}</td>
                     <td>${this.formatPhone(student.phone)}</td>
                     <td>${student.course || 'N/A'}</td>
@@ -398,12 +401,27 @@ class StudentsManager {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
                         <label for="studentCedula">Cédula</label>
-                        <input 
-                            type="text" 
-                            id="studentCedula" 
-                            value="${student?.cedula || ''}" 
-                            placeholder="Ej: 123456789"
-                        >
+                        <div style="display: flex; gap: 5px;">
+                            <input 
+                                type="text" 
+                                id="studentCedula" 
+                                value="${student?.cedula || ''}" 
+                                placeholder="Ej: 123456789"
+                                style="flex: 1;"
+                            >
+                            <button 
+                                type="button" 
+                                id="searchCedulaBtn" 
+                                class="btn-info" 
+                                style="padding: 8px 12px; white-space: nowrap;"
+                                title="Buscar información por cédula"
+                            >
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <small style="color: #666; font-size: 0.85em; margin-top: 5px; display: block;">
+                            Ingrese la cédula y presione el botón de búsqueda para llenar automáticamente el nombre y apellidos
+                        </small>
                     </div>
                     
                     <div class="form-group">
@@ -425,36 +443,13 @@ class StudentsManager {
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
-                        <label for="firstName">Nombre *</label>
+                        <label for="fullName">Nombre Completo *</label>
                         <input 
                             type="text" 
-                            id="firstName" 
-                            value="${student?.firstName || ''}" 
+                            id="fullName" 
+                            value="${student?.fullName || (student?.firstName && student?.lastName ? `${student.firstName} ${student.lastName}` : '')}" 
                             required
-                            placeholder="Nombre"
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="lastName">Apellidos *</label>
-                        <input 
-                            type="text" 
-                            value="${student?.lastName || ''}" 
-                            required
-                            placeholder="Apellidos"
-                        >
-                    </div>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label for="lastName">Apellidos *</label>
-                        <input 
-                            type="text" 
-                            id="lastName" 
-                            value="${student?.lastName || ''}" 
-                            required
-                            placeholder="Apellidos"
+                            placeholder="Nombre completo"
                         >
                     </div>
                     
@@ -600,7 +595,197 @@ class StudentsManager {
                     }
                 });
             }
+
+            // Configurar búsqueda automática de cédula
+            this.setupCedulaSearch();
         }, 100);
+    }
+
+    setupCedulaSearch() {
+        const cedulaInput = document.getElementById('studentCedula');
+        const fullNameInput = document.getElementById('fullName');
+
+        if (!cedulaInput || !fullNameInput) {
+            return;
+        }
+
+        // Solo buscar si el campo de nombre completo está vacío (para no sobrescribir datos existentes)
+        const shouldSearch = () => {
+            return !fullNameInput.value.trim();
+        };
+
+        const searchCedula = async (cedula, checkEmptyFields = true) => {
+            if (!cedula || cedula.length < 9) {
+                return;
+            }
+
+            // Solo buscar si los campos están vacíos (solo para búsqueda automática)
+            if (checkEmptyFields && !shouldSearch()) {
+                return;
+            }
+
+            try {
+                // Mostrar indicador de carga
+                cedulaInput.style.borderColor = '#667eea';
+                const loadingIndicator = document.createElement('span');
+                loadingIndicator.innerHTML = ' <i class="fas fa-spinner fa-spin"></i>';
+                loadingIndicator.id = 'cedulaLoading';
+                loadingIndicator.style.marginLeft = '5px';
+                loadingIndicator.style.color = '#667eea';
+                
+                // Buscar el contenedor del input (el div con display: flex)
+                const inputContainer = cedulaInput.parentElement;
+                if (inputContainer && !inputContainer.querySelector('#cedulaLoading')) {
+                    inputContainer.appendChild(loadingIndicator);
+                }
+
+                const url = `https://apis.gometa.org/cedulas/${cedula}`;
+                const response = await fetch(url);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // La API devuelve apellido primero y luego nombre, necesitamos invertirlo
+                    if (data) {
+                        let nombreCompletoReorganizado = '';
+
+                        // PRIMERO: Buscar el nombre completo en cualquier campo de la API
+                        let nombreCompletoAPI = '';
+                        if (data.nombreCompleto) {
+                            nombreCompletoAPI = data.nombreCompleto;
+                        } else if (data.fullName) {
+                            nombreCompletoAPI = data.fullName;
+                        } else if (data.name) {
+                            nombreCompletoAPI = data.name;
+                        } else if (data.nombre) {
+                            nombreCompletoAPI = data.nombre;
+                        } else if (data.apellidos && data.nombre) {
+                            // Si vienen en campos separados, combinarlos
+                            nombreCompletoAPI = `${data.nombre} ${data.apellidos}`;
+                        } else if (data.apellidos) {
+                            nombreCompletoAPI = data.apellidos;
+                        }
+
+                        // Si encontramos el nombre completo, reorganizarlo
+                        if (nombreCompletoAPI) {
+                            const partes = nombreCompletoAPI.trim().split(/\s+/).filter(p => p.length > 0);
+                            
+                            if (partes.length >= 2) {
+                                // La API devuelve: "primer apellido segundo apellido primer nombre segundo nombre"
+                                
+                                if (partes.length === 2) {
+                                    // Si hay 2 palabras: apellido nombre -> nombre apellido
+                                    nombreCompletoReorganizado = `${partes[1]} ${partes[0]}`;
+                                } else if (partes.length === 3) {
+                                    nombreCompletoReorganizado = `${partes[2]} ${partes[0]} ${partes[1]}`;
+                                } else if (partes.length === 4) {
+                                    // Si hay 4 palabras: apellido1 apellido2 nombre1 nombre2 -> nombre1 nombre2 apellido1 apellido2
+                                    nombreCompletoReorganizado = `${partes[2]} ${partes[3]} ${partes[0]} ${partes[1]}`;
+                                } else if (partes.length >= 5) {
+                                    const nombres = partes.slice(partes.length - 2).join(' ');
+                                    const apellidos = partes.slice(0, partes.length - 2).join(' ');
+                                    nombreCompletoReorganizado = `${nombres} ${apellidos}`;
+                                }
+                            } else if (partes.length === 1) {
+                                // Si solo hay una palabra, usarla tal cual
+                                nombreCompletoReorganizado = partes[0];
+                            }
+                        }
+
+                        // Llenar el campo de nombre completo (si checkEmptyFields es false, siempre llenar)
+                        if (!checkEmptyFields || shouldSearch()) {
+                            if (nombreCompletoReorganizado) {
+                                fullNameInput.value = nombreCompletoReorganizado;
+                                
+                                // Mostrar notificación de éxito
+                                if (window.app) {
+                                    window.app.showNotification('Información de la cédula cargada exitosamente', 'success');
+                                }
+                            } else if (window.app) {
+                                window.app.showNotification('No se encontró información para esta cédula', 'warning');
+                            }
+                        }
+                    }
+                } else {
+                    console.warn('No se pudo obtener información de la cédula');
+                }
+            } catch (error) {
+                console.error('Error al buscar información de la cédula:', error);
+                // No mostrar error al usuario, solo loguear
+            } finally {
+                // Remover indicador de carga
+                const inputContainer = cedulaInput.parentElement;
+                const loadingIndicator = inputContainer?.querySelector('#cedulaLoading');
+                if (loadingIndicator) {
+                    loadingIndicator.remove();
+                }
+                cedulaInput.style.borderColor = '';
+            }
+        };
+
+        // Buscar cuando el usuario sale del campo (blur) o presiona Enter (solo si campos vacíos)
+        const handleCedulaSearch = () => {
+            const cedula = cedulaInput.value.trim();
+            if (cedula && shouldSearch()) {
+                searchCedula(cedula, true);
+            }
+        };
+
+        // Botón de búsqueda manual (siempre permite buscar, incluso si hay datos)
+        const searchBtn = document.getElementById('searchCedulaBtn');
+        if (searchBtn) {
+            searchBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const cedula = cedulaInput.value.trim();
+                if (!cedula) {
+                    if (window.app) {
+                        window.app.showNotification('Por favor ingrese un número de cédula', 'warning');
+                    }
+                    return;
+                }
+
+                if (cedula.length < 9) {
+                    if (window.app) {
+                        window.app.showNotification('La cédula debe tener al menos 9 dígitos', 'warning');
+                    }
+                    return;
+                }
+
+                // Si hay datos en el campo, preguntar si quiere sobrescribir
+                const hasExistingData = fullNameInput.value.trim();
+                if (hasExistingData) {
+                    const confirmOverwrite = confirm(
+                        'El campo de nombre completo ya tiene datos. ¿Desea sobrescribirlos con la información de la cédula?'
+                    );
+                    if (!confirmOverwrite) {
+                        return;
+                    }
+                }
+
+                // Buscar sin restricción de campos vacíos
+                await searchCedula(cedula, false);
+            });
+        }
+
+        cedulaInput.addEventListener('blur', handleCedulaSearch);
+        cedulaInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCedulaSearch();
+            }
+        });
+
+        // También buscar después de un delay cuando el usuario está escribiendo (debounce)
+        let searchTimeout;
+        cedulaInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            const cedula = cedulaInput.value.trim();
+            if (cedula.length >= 9 && shouldSearch()) {
+                searchTimeout = setTimeout(() => {
+                    searchCedula(cedula, true);
+                }, 1500); // Esperar 1.5 segundos después de que el usuario deje de escribir
+            }
+        });
     }
 
     async saveStudent(studentId = null) {
@@ -619,12 +804,19 @@ class StudentsManager {
         console.log('Email value final:', emailValue);
         console.log('========================');
         
+        // Obtener nombre completo y dividirlo para mantener compatibilidad con datos existentes
+        const fullName = document.getElementById('fullName').value.trim();
+        const nameParts = fullName.split(/\s+/).filter(p => p.length > 0);
+        const firstName = nameParts.length > 0 ? nameParts[0] : '';
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
         const studentData = {
             studentId: document.getElementById('studentId').value.trim(),
             group: document.getElementById('studentGroup').value,
             cedula: document.getElementById('studentCedula').value.trim(),
-            firstName: document.getElementById('firstName').value.trim(),
-            lastName: document.getElementById('lastName').value.trim(),
+            fullName: fullName,
+            firstName: firstName, // Mantener para compatibilidad
+            lastName: lastName, // Mantener para compatibilidad
             email: emailValue,
             phone: document.getElementById('phone').value.trim(),
             secondaryPhone: document.getElementById('secondaryPhone').value.trim(),
@@ -644,8 +836,7 @@ class StudentsManager {
             studentId: document.getElementById('studentId'),
             studentGroup: document.getElementById('studentGroup'),
             studentCedula: document.getElementById('studentCedula'),
-            firstName: document.getElementById('firstName'),
-            lastName: document.getElementById('lastName'),
+            fullName: document.getElementById('fullName'),
             email: document.getElementById('email'),
             phone: document.getElementById('phone'),
             secondaryPhone: document.getElementById('secondaryPhone'),
@@ -673,15 +864,14 @@ class StudentsManager {
         }
 
         // Validaciones
-        if (!studentData.studentId || !studentData.group || !studentData.firstName || !studentData.lastName || 
+        if (!studentData.studentId || !studentData.group || !studentData.fullName || 
             !studentData.email || !studentData.course || !studentData.enrollmentDate) {
             if (window.app) {
                 // Mostrar qué campos están vacíos para debugging
                 const emptyFields = [];
                 if (!studentData.studentId) emptyFields.push('ID del Estudiante');
                 if (!studentData.group) emptyFields.push('Número de Grupo');
-                if (!studentData.firstName) emptyFields.push('Nombre');
-                if (!studentData.lastName) emptyFields.push('Apellidos');
+                if (!studentData.fullName) emptyFields.push('Nombre Completo');
                 if (!studentData.email) emptyFields.push('Email');
                 if (!studentData.course) emptyFields.push('Curso');
                 if (!studentData.enrollmentDate) emptyFields.push('Fecha de Matrícula');
@@ -821,8 +1011,11 @@ class StudentsManager {
         const student = this.students[studentId];
         if (!student) return;
 
+        const fullName = student.fullName || 
+            (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : 
+            (student.firstName || student.lastName || 'Estudiante'));
         const confirmed = confirm(
-            `¿Está seguro de que desea eliminar al estudiante "${student.firstName} ${student.lastName}"?\n\n` +
+            `¿Está seguro de que desea eliminar al estudiante "${fullName}"?\n\n` +
             'Esta acción no se puede deshacer y eliminará todos los datos relacionados.'
         );
 
@@ -868,7 +1061,7 @@ class StudentsManager {
                         <div><strong>ID:</strong> ${student.studentId}</div>
                         <div><strong>Número de Grupo:</strong> ${student.group || 'No especificado'}</div>
                         <div><strong>Cédula:</strong> ${student.cedula || 'No especificada'}</div>
-                        <div><strong>Nombre:</strong> ${student.firstName} ${student.lastName}</div>
+                        <div><strong>Nombre:</strong> ${student.fullName || (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : (student.firstName || student.lastName || 'N/A'))}</div>
                         <div><strong>Email:</strong> ${student.email}</div>
                         <div><strong>Teléfono Principal:</strong> ${this.formatPhone(student.phone)}</div>
                         <div><strong>Teléfono Secundario:</strong> ${student.secondaryPhone ? this.formatPhone(student.secondaryPhone) : 'No especificado'}</div>
@@ -1003,7 +1196,9 @@ class StudentsManager {
         doc.setFontSize(13);
         cursorY += 40;
 
-        const fullName = `${student.firstName} ${student.lastName}`.trim();
+        const fullName = student.fullName || 
+            (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : 
+            (student.firstName || student.lastName || ''));
         const cedula = student.cedula || '________________';
         const mainParagraph = `Que ${fullName.toUpperCase()} cédula de identidad ${cedula}, es estudiante activo(a) del programa Asistente Técnico Veterinario. Este programa consta de un total de 13 materias mensuales y, por su naturaleza eminentemente práctica, se imparte en modalidad presencial únicamente, por lo que los estudiantes deben presentarse a recibir sus clases en nuestras instalaciones. Tiene un horario lunes y martes de 6:00 a 10:00 pm. Además, las reposiciones de clases se pueden dar entre semana de miércoles a viernes.`;
         const mainLines = doc.splitTextToSize(mainParagraph, pageWidth - marginX * 2);
@@ -1096,7 +1291,9 @@ class StudentsManager {
             .filter(([id, student]) => student.status === 'active')
             .map(([id, student]) => ({
                 id,
-                name: `${student.firstName} ${student.lastName}`,
+                name: student.fullName || 
+                    (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : 
+                    (student.firstName || student.lastName || '')),
                 studentId: student.studentId,
                 level: student.course,
                 email: student.email
@@ -1154,7 +1351,9 @@ class StudentsManager {
             'ID': student.studentId,
             'Número de Grupo': student.group || 'N/A',
             'Cédula': student.cedula,
-            'Nombre': `${student.firstName} ${student.lastName}`,
+            'Nombre': student.fullName || 
+                (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` : 
+                (student.firstName || student.lastName || 'N/A')),
             'Email': student.email,
             'Teléfono Principal': student.phone ? this.formatPhone(student.phone) : 'N/A',
             'Teléfono Secundario': student.secondaryPhone ? this.formatPhone(student.secondaryPhone) : 'N/A',

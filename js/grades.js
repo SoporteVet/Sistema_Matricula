@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class GradesManager {
     constructor() {
@@ -15,18 +15,60 @@ class GradesManager {
         this.groups = {};
         this.grades = {};
         this.evaluations = {};
+        this.attendance = {};
         this.filteredStudents = {};
         this.currentGroup = null;
         this.currentEvaluation = null;
+        
+        // Propiedades para asistencia integrada
+        this.currentStudentsForAttendance = [];
+        this.currentAttendanceData = {};
+        this.dateColumns = [];
+        this.selectedDates = [];
+        this.currentCalendarDate = new Date();
+        
         this.setupEventListeners();
+        this.setupTabsEventListeners();
     }
 
     async init() {
         try {
             await this.loadAllData();
+            this.initializeAttendanceCalendar();
         } catch (error) {
             console.warn('Error al inicializar GradesManager:', error);
         }
+    }
+
+    setupTabsEventListeners() {
+        // Configurar tabs dentro de la sección de notas
+        const tabButtons = document.querySelectorAll('#grades .tab-btn');
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tabId = e.currentTarget.dataset.tab;
+                this.switchTab(tabId);
+            });
+        });
+    }
+
+    switchTab(tabId) {
+        // Actualizar botones de tabs
+        const tabButtons = document.querySelectorAll('#grades .tab-btn');
+        tabButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.tab === tabId) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Actualizar contenido de tabs
+        const tabContents = document.querySelectorAll('#grades .tab-content');
+        tabContents.forEach(content => {
+            content.classList.remove('active');
+            if (content.id === tabId) {
+                content.classList.add('active');
+            }
+        });
     }
 
     setupEventListeners() {
@@ -44,7 +86,7 @@ class GradesManager {
             console.error('Botón addEvaluationBtn no encontrado en el DOM');
         }
 
-        // Filtros
+        // Filtros de evaluaciones
         const groupFilter = document.getElementById('gradesGroupFilter');
         if (groupFilter) {
             // Remover listeners existentes para evitar duplicación
@@ -65,24 +107,709 @@ class GradesManager {
             evaluationFilter.addEventListener('change', this.handleEvaluationFilterChange);
         }
 
+        // ============ Eventos de Asistencia Integrada ============
+        
+        // Filtros de asistencia
+        const attendanceGroupFilter = document.getElementById('gradesAttendanceGroupFilter');
+        if (attendanceGroupFilter) {
+            attendanceGroupFilter.addEventListener('change', () => {
+                this.loadStudentsInAttendanceTable();
+            });
+        }
+
+        const attendanceCourseFilter = document.getElementById('gradesAttendanceCourseFilter');
+        if (attendanceCourseFilter) {
+            attendanceCourseFilter.addEventListener('change', () => {
+                this.loadStudentsInAttendanceTable();
+            });
+        }
+
+        const attendanceTeacherFilter = document.getElementById('gradesAttendanceTeacherFilter');
+        if (attendanceTeacherFilter) {
+            attendanceTeacherFilter.addEventListener('change', () => {
+                this.loadStudentsInAttendanceTable();
+            });
+        }
+
+        const attendanceSchedule = document.getElementById('gradesAttendanceSchedule');
+        if (attendanceSchedule) {
+            attendanceSchedule.addEventListener('change', () => {
+                this.loadStudentsInAttendanceTable();
+            });
+        }
+
+        // Botón de guardar asistencia
+        const saveAttendanceBtn = document.getElementById('saveGradesAttendanceBtn');
+        if (saveAttendanceBtn) {
+            saveAttendanceBtn.addEventListener('click', () => {
+                this.saveAllAttendance();
+            });
+        }
+
         // Configurar actualización en tiempo real
         this.setupRealTimeUpdates();
     }
 
-    setupRealTimeUpdates() {
-        const collections = ['students', 'courses', 'groups', 'grades', 'evaluations'];
-        
-        collections.forEach(collection => {
-            const collectionRef = ref(db, collection);
-            onValue(collectionRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    this[collection] = snapshot.val();
-                } else {
-                    this[collection] = {};
-                }
-                this.applyFilters();
+    // ============ Métodos de Asistencia Integrada ============
+
+    initializeAttendanceCalendar() {
+        this.selectedDates = [];
+        this.currentCalendarDate = new Date();
+        this.renderAttendanceCalendar();
+        this.setupAttendanceCalendarEventListeners();
+    }
+
+    setupAttendanceCalendarEventListeners() {
+        const prevMonthBtn = document.getElementById('gradesAttendancePrevMonth');
+        const nextMonthBtn = document.getElementById('gradesAttendanceNextMonth');
+        const clearDatesBtn = document.getElementById('gradesAttendanceClearDates');
+        const selectTodayBtn = document.getElementById('gradesAttendanceSelectToday');
+
+        if (prevMonthBtn) {
+            prevMonthBtn.addEventListener('click', () => {
+                this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() - 1);
+                this.renderAttendanceCalendar();
             });
+        }
+
+        if (nextMonthBtn) {
+            nextMonthBtn.addEventListener('click', () => {
+                this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() + 1);
+                this.renderAttendanceCalendar();
+            });
+        }
+
+        if (clearDatesBtn) {
+            clearDatesBtn.addEventListener('click', () => {
+                this.selectedDates = [];
+                this.dateColumns = [];
+                this.renderAttendanceCalendar();
+                this.updateAttendanceTableHeader();
+                this.loadStudentsInAttendanceTable();
+            });
+        }
+
+        if (selectTodayBtn) {
+            selectTodayBtn.addEventListener('click', () => {
+                const today = new Date();
+                const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                
+                if (!this.selectedDates.includes(todayStr)) {
+                    this.selectedDates.push(todayStr);
+                }
+                
+                if (!this.dateColumns.includes(todayStr)) {
+                    this.dateColumns.push(todayStr);
+                }
+                
+                if (today.getMonth() !== this.currentCalendarDate.getMonth() || 
+                    today.getFullYear() !== this.currentCalendarDate.getFullYear()) {
+                    this.currentCalendarDate = new Date(today);
+                }
+                
+                this.renderAttendanceCalendar();
+                this.updateAttendanceTableHeader();
+                this.loadStudentsInAttendanceTable();
+            });
+        }
+    }
+
+    renderAttendanceCalendar() {
+        const calendarGrid = document.getElementById('gradesAttendanceMonthYear');
+        const calendarBody = document.getElementById('gradesAttendanceCalendarGrid');
+        
+        if (!calendarGrid || !calendarBody) return;
+
+        const year = this.currentCalendarDate.getFullYear();
+        const month = this.currentCalendarDate.getMonth();
+        
+        const monthNames = [
+            'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+            'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+        ];
+        calendarGrid.textContent = `${monthNames[month]} de ${year}`;
+
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+
+        let calendarHTML = `
+            <div class="attendance-calendar-weekdays">
+                <div>LU</div>
+                <div>MA</div>
+                <div>MI</div>
+                <div>JU</div>
+                <div>VI</div>
+                <div>SA</div>
+                <div>DO</div>
+            </div>
+            <div class="attendance-calendar-days">
+        `;
+
+        const prevMonth = new Date(year, month, 0);
+        const daysInPrevMonth = prevMonth.getDate();
+        for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+            const day = daysInPrevMonth - i;
+            calendarHTML += `<div class="attendance-calendar-day prev-month" data-date="${day}">${day}</div>`;
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${String(day).padStart(2, '0')}-${String(month + 1).padStart(2, '0')}`;
+            const isSelected = this.selectedDates.includes(dateStr);
+            const isToday = this.isToday(year, month, day);
+            
+            calendarHTML += `
+                <div class="attendance-calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}" 
+                     data-date="${day}" 
+                     data-date-str="${dateStr}"
+                     onclick="window.gradesManager.toggleAttendanceDate('${dateStr}')">
+                    ${day}
+                </div>
+            `;
+        }
+
+        const remainingDays = 42 - (startingDayOfWeek + daysInMonth);
+        for (let day = 1; day <= remainingDays; day++) {
+            calendarHTML += `<div class="attendance-calendar-day next-month" data-date="${day}">${day}</div>`;
+        }
+
+        calendarHTML += '</div>';
+        calendarBody.innerHTML = calendarHTML;
+        
+        this.updateSelectedDatesList();
+    }
+
+    isToday(year, month, day) {
+        const today = new Date();
+        return today.getFullYear() === year && 
+               today.getMonth() === month && 
+               today.getDate() === day;
+    }
+
+    getWeekNumber(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+
+    hasSavedAttendanceForDate(dateStr) {
+        const [day, month] = dateStr.split('-');
+        const currentYear = new Date().getFullYear();
+        const fullDate = `${currentYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        
+        const currentTeacherId = this.getCurrentTeacherId();
+        
+        return Object.values(this.attendance).some(record => 
+            (record.date === fullDate || record.displayDate === dateStr) &&
+            record.teacherId === currentTeacherId
+        );
+    }
+
+    getSavedAttendanceValue(studentId, dateStr) {
+        const [day, month] = dateStr.split('-');
+        const currentYear = new Date().getFullYear();
+        const fullDate = `${currentYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        
+        const currentTeacherId = this.getCurrentTeacherId();
+        
+        const record = Object.values(this.attendance).find(att => 
+            att.studentId === studentId && 
+            (att.date === fullDate || att.displayDate === dateStr) &&
+            att.teacherId === currentTeacherId
+        );
+        
+        return record ? record.status : null;
+    }
+
+    getCurrentTeacherId() {
+        if (window.currentUser && window.currentUser.id) {
+            return window.currentUser.id;
+        }
+        
+        if (window.auth && window.auth.getCurrentUserId) {
+            return window.auth.getCurrentUserId();
+        }
+        
+        console.warn('No se pudo obtener el ID del profesor actual');
+        return 'unknown_teacher';
+    }
+
+    isCurrentUserAdmin() {
+        if (window.currentUser && window.currentUser.role) {
+            return window.currentUser.role === 'admin';
+        }
+        
+        if (window.auth && window.auth.isAdmin) {
+            return window.auth.isAdmin();
+        }
+        
+        return true;
+    }
+
+    toggleAttendanceDate(dateStr) {
+        const index = this.selectedDates.indexOf(dateStr);
+        if (index > -1) {
+            if (this.hasSavedAttendanceForDate(dateStr)) {
+                if (window.app) {
+                    window.app.showNotification('No se puede eliminar una fecha que ya tiene asistencia guardada', 'error');
+                }
+                return;
+            }
+            
+            this.selectedDates.splice(index, 1);
+            const dateIndex = this.dateColumns.indexOf(dateStr);
+            if (dateIndex > -1) {
+                this.dateColumns.splice(dateIndex, 1);
+            }
+        } else {
+            this.selectedDates.push(dateStr);
+            if (!this.dateColumns.includes(dateStr)) {
+                this.dateColumns.push(dateStr);
+            }
+            
+            this.selectedDates.sort((a, b) => {
+                const [dayA, monthA] = a.split('-');
+                const [dayB, monthB] = b.split('-');
+                const currentYear = new Date().getFullYear();
+                const dateA = new Date(currentYear, parseInt(monthA) - 1, parseInt(dayA));
+                const dateB = new Date(currentYear, parseInt(monthB) - 1, parseInt(dayB));
+                return dateA - dateB;
+            });
+            
+            this.dateColumns = [...this.selectedDates];
+        }
+        this.renderAttendanceCalendar();
+        this.updateAttendanceTableHeader();
+        this.loadStudentsInAttendanceTable();
+    }
+
+    updateSelectedDatesList() {
+        const selectedDatesList = document.getElementById('gradesSelectedDatesList');
+        if (!selectedDatesList) return;
+
+        if (this.selectedDates.length === 0) {
+            selectedDatesList.innerHTML = '<p style="color: #6c757d; font-style: italic;">No hay fechas seleccionadas</p>';
+        } else {
+            selectedDatesList.innerHTML = this.selectedDates.map(date => {
+                const hasSavedData = this.hasSavedAttendanceForDate(date);
+                return `
+                    <div class="selected-date-item ${hasSavedData ? 'locked' : ''}">
+                        <span>${date} ${hasSavedData ? '(Guardada)' : ''}</span>
+                        ${hasSavedData ? '' : `<button class="btn-danger btn-sm" onclick="window.gradesManager.removeSelectedAttendanceDate('${date}')">
+                            <i class="fas fa-times"></i>
+                        </button>`}
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    removeSelectedAttendanceDate(dateStr) {
+        if (this.hasSavedAttendanceForDate(dateStr)) {
+            if (window.app) {
+                window.app.showNotification('No se puede eliminar una fecha que ya tiene asistencia guardada', 'error');
+            }
+            return;
+        }
+        
+        const index = this.selectedDates.indexOf(dateStr);
+        if (index > -1) {
+            this.selectedDates.splice(index, 1);
+            this.renderAttendanceCalendar();
+        }
+    }
+
+    updateAttendanceTableHeader() {
+        const thead = document.querySelector('#gradesAttendanceTable thead tr');
+        if (!thead) return;
+
+        const existingDateHeaders = thead.querySelectorAll('.date-column-header');
+        existingDateHeaders.forEach(header => header.remove());
+
+        const dateHeaders = this.dateColumns.map((date, index) => {
+            const th = document.createElement('th');
+            th.className = 'date-column-header';
+            
+            const hasSavedData = this.hasSavedAttendanceForDate(date);
+            
+            th.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>${date}</span>
+                    ${hasSavedData ? '' : `<button class="btn-danger btn-sm" onclick="window.gradesManager.removeAttendanceDateColumn(${index})" style="margin-left: 5px;">
+                        <i class="fas fa-times"></i>
+                    </button>`}
+                </div>
+            `;
+            return th;
         });
+
+        const materiaHeader = thead.querySelector('th:nth-child(7)');
+        if (materiaHeader) {
+            dateHeaders.forEach(th => {
+                thead.insertBefore(th, materiaHeader);
+            });
+        } else {
+            dateHeaders.forEach(th => {
+                thead.appendChild(th);
+            });
+        }
+    }
+
+    removeAttendanceDateColumn(index) {
+        const dateToRemove = this.dateColumns[index];
+        
+        if (this.hasSavedAttendanceForDate(dateToRemove)) {
+            if (window.app) {
+                window.app.showNotification('No se puede eliminar una fecha que ya tiene asistencia guardada', 'error');
+            }
+            return;
+        }
+        
+        this.dateColumns.splice(index, 1);
+        
+        const selectedIndex = this.selectedDates.indexOf(dateToRemove);
+        if (selectedIndex > -1) {
+            this.selectedDates.splice(selectedIndex, 1);
+        }
+        
+        this.renderAttendanceCalendar();
+        this.updateAttendanceTableHeader();
+        this.loadStudentsInAttendanceTable();
+    }
+
+    updateAttendanceGroupFilter() {
+        const attendanceGroupFilter = document.getElementById('gradesAttendanceGroupFilter');
+        
+        if (attendanceGroupFilter) {
+            const activeGroups = Object.entries(this.groups)
+                .filter(([id, group]) => group.status === 'active')
+                .map(([id, group]) => ({ id, ...group }));
+            
+            attendanceGroupFilter.innerHTML = '<option value="">Seleccionar grupo</option>' +
+                activeGroups.map(group => 
+                    `<option value="${group.id}">${group.groupCode} - ${group.groupName}</option>`
+                ).join('');
+        }
+    }
+
+    async loadStudentsInAttendanceTable() {
+        const groupFilter = document.getElementById('gradesAttendanceGroupFilter');
+        const courseFilter = document.getElementById('gradesAttendanceCourseFilter');
+        const teacherFilter = document.getElementById('gradesAttendanceTeacherFilter');
+        const scheduleFilter = document.getElementById('gradesAttendanceSchedule');
+        
+        if (!groupFilter || !groupFilter.value) {
+            this.renderEmptyAttendanceTable();
+            return;
+        }
+
+        if (Object.keys(this.students).length === 0 || Object.keys(this.groups).length === 0) {
+            await this.loadAllData();
+        }
+
+        const selectedGroup = groupFilter.value;
+        const selectedCourse = courseFilter ? courseFilter.value : '';
+        const selectedTeacher = teacherFilter ? teacherFilter.value : '';
+        const selectedSchedule = scheduleFilter ? scheduleFilter.value : '';
+
+        try {
+            let studentsToShow = [];
+
+            const group = this.groups[selectedGroup];
+            
+            if (group) {
+                if (group.students && group.students.length > 0) {
+                    const mappedStudents = group.students.map(studentId => {
+                        const studentData = this.students[studentId];
+                        return { id: studentId, ...studentData };
+                    });
+                    
+                    studentsToShow = mappedStudents.filter(student => {
+                        return student && student.firstName && student.lastName && student.status === 'active';
+                    });
+                    
+                } else {
+                    const groupName = group.groupName || group.groupCode || '';
+                    
+                    studentsToShow = Object.entries(this.students)
+                        .filter(([studentId, student]) => {
+                            const belongsToGroupById = student.group === selectedGroup;
+                            const belongsToGroupByName = student.group === groupName;
+                            const belongsToGroupByCode = student.group === group.groupCode;
+                            const belongsToGroup = belongsToGroupById || belongsToGroupByName || belongsToGroupByCode;
+                            
+                            return belongsToGroup && student && student.firstName && student.lastName && student.status === 'active';
+                        })
+                        .map(([studentId, student]) => ({ id: studentId, ...student }));
+                }
+            }
+
+            this.currentStudentsForAttendance = studentsToShow;
+            
+            this.renderStudentsInAttendanceTable(studentsToShow, selectedGroup, selectedCourse, selectedTeacher, selectedSchedule);
+            
+            const saveBtn = document.getElementById('saveGradesAttendanceBtn');
+            if (saveBtn) {
+                saveBtn.style.display = studentsToShow.length > 0 ? 'block' : 'none';
+            }
+
+        } catch (error) {
+            console.error('Error al cargar estudiantes:', error);
+            if (window.app) {
+                window.app.showNotification('Error al cargar estudiantes', 'error');
+            }
+        }
+    }
+
+    renderEmptyAttendanceTable() {
+        const tbody = document.querySelector('#gradesAttendanceTable tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center">
+                        <div style="padding: 40px; color: #6c757d;">
+                            <i class="fas fa-calendar-check fa-3x mb-3"></i>
+                            <h4>Seleccione un grupo para comenzar</h4>
+                            <p>Elija un grupo y fecha para cargar los estudiantes</p>
+                        </div>
+                </td>
+            </tr>
+        `;
+
+        const saveBtn = document.getElementById('saveGradesAttendanceBtn');
+        if (saveBtn) {
+            saveBtn.style.display = 'none';
+        }
+    }
+
+    renderStudentsInAttendanceTable(students, groupId, course, teacher, schedule) {
+        const tbody = document.querySelector('#gradesAttendanceTable tbody');
+        if (!tbody) return;
+
+        if (students.length === 0) {
+            const colspan = 11 + this.dateColumns.length;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="${colspan}" class="text-center">
+                        <div style="padding: 40px; color: #6c757d;">
+                            <i class="fas fa-user-graduate fa-3x mb-3"></i>
+                            <h4>No hay estudiantes</h4>
+                            <p>No se encontraron estudiantes para los criterios seleccionados</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const group = this.groups[groupId];
+        const groupCode = group ? group.groupCode : 'N/A';
+        const groupStartDate = group ? this.formatDate(group.startDate) : 'N/A';
+
+        tbody.innerHTML = students.map(student => {
+            const dateColumns = this.dateColumns.map(date => {
+                const savedValue = this.getSavedAttendanceValue(student.id, date);
+                const isAdmin = this.isCurrentUserAdmin();
+                
+                return `
+                    <td class="attendance-date-cell">
+                        <select class="attendance-status-select" data-student-id="${student.id}" data-date="${date}" ${!isAdmin && savedValue ? 'disabled' : ''}>
+                            <option value="P" ${savedValue === 'P' ? 'selected' : ''}>P</option>
+                            <option value="A" ${savedValue === 'A' ? 'selected' : ''}>A</option>
+                            <option value="T" ${savedValue === 'T' ? 'selected' : ''}>T</option>
+                            <option value="CONGELADO" ${savedValue === 'CONGELADO' ? 'selected' : ''}>CONGELADO</option>
+                        </select>
+                    </td>
+                `;
+            }).join('');
+
+            return `
+                <tr data-student-id="${student.id}">
+                    <td>${groupCode}</td>
+                    <td>${groupStartDate}</td>
+                    <td>${student.firstName} ${student.lastName}</td>
+                    <td>${student.cedula || student.studentId}</td>
+                    <td>${student.phone || 'N/A'}</td>
+                    <td>${student.email}</td>
+                    ${dateColumns}
+                    <td>${course || 'N/A'}</td>
+                    <td>${teacher || 'N/A'}</td>
+                    <td>${schedule || 'N/A'}</td>
+                    <td>
+                        <input type="text" class="final-grade-input" data-student-id="${student.id}" 
+                               placeholder="Nota" style="width: 60px; text-align: center;">
+                    </td>
+                    <td>
+                        <select class="student-status-select" data-student-id="${student.id}">
+                            <option value="ACTIVO">ACTIVO</option>
+                            <option value="CONGELADO">CONGELADO</option>
+                            <option value="GRADUADO">GRADUADO</option>
+                            <option value="ABANDONO">ABANDONO</option>
+                        </select>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async saveAllAttendance() {
+        if (!this.isCurrentUserAdmin()) {
+            if (window.app) {
+                window.app.showNotification('Solo los administradores pueden guardar asistencia', 'error');
+            }
+            return;
+        }
+
+        const groupFilter = document.getElementById('gradesAttendanceGroupFilter');
+        const courseFilter = document.getElementById('gradesAttendanceCourseFilter');
+        const teacherFilter = document.getElementById('gradesAttendanceTeacherFilter');
+        const scheduleFilter = document.getElementById('gradesAttendanceSchedule');
+        
+        if (!groupFilter || !groupFilter.value) {
+            if (window.app) {
+                window.app.showNotification('Seleccione un grupo', 'error');
+            }
+            return;
+        }
+
+        try {
+            const group = groupFilter.value;
+            const course = courseFilter ? courseFilter.value : '';
+            const teacher = teacherFilter ? teacherFilter.value : '';
+            const schedule = scheduleFilter ? scheduleFilter.value : '';
+            
+            const attendanceRecords = [];
+            const updates = [];
+
+            this.currentStudentsForAttendance.forEach(student => {
+                this.dateColumns.forEach(date => {
+                    const statusSelect = document.querySelector(`#gradesAttendanceTable select[data-student-id="${student.id}"][data-date="${date}"]`);
+                    const finalGradeInput = document.querySelector(`#gradesAttendanceTable input.final-grade-input[data-student-id="${student.id}"]`);
+                    const studentStatusSelect = document.querySelector(`#gradesAttendanceTable select.student-status-select[data-student-id="${student.id}"]`);
+                
+                    if (!statusSelect) return;
+
+                    const status = statusSelect.value;
+                    const finalGrade = finalGradeInput ? finalGradeInput.value.trim() : '';
+                    const studentStatus = studentStatusSelect ? studentStatusSelect.value : 'ACTIVO';
+
+                    const [day, month] = date.split('-');
+                    const currentYear = new Date().getFullYear();
+                    const fullDate = `${currentYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    
+                    const dateObj = new Date(fullDate);
+                    const weekNumber = this.getWeekNumber(dateObj);
+
+                    const attendanceData = {
+                        studentId: student.id,
+                        studentName: `${student.firstName} ${student.lastName}`,
+                        course: course,
+                        teacher: teacher,
+                        teacherId: this.getCurrentTeacherId(),
+                        schedule: schedule,
+                        date: fullDate,
+                        displayDate: date,
+                        status: status,
+                        finalGrade: finalGrade,
+                        studentStatus: studentStatus,
+                        group: group,
+                        week: weekNumber,
+                        year: currentYear,
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    const existingRecord = Object.entries(this.attendance).find(([id, record]) => 
+                        record.studentId === student.id && 
+                        record.date === fullDate && 
+                        record.group === group &&
+                        record.teacherId === this.getCurrentTeacherId()
+                    );
+
+                    if (existingRecord) {
+                        updates.push({ id: existingRecord[0], data: attendanceData });
+                    } else {
+                        attendanceData.createdAt = new Date().toISOString();
+                        attendanceRecords.push(attendanceData);
+                    }
+                });
+            });
+
+            const attendanceRef = ref(db, 'attendance');
+            for (const record of attendanceRecords) {
+                await push(attendanceRef, record);
+            }
+
+            for (const update of updates) {
+                const recordRef = ref(db, `attendance/${update.id}`);
+                await set(recordRef, update.data);
+            }
+
+            if (window.app) {
+                window.app.showNotification(
+                    `Asistencia guardada para ${this.currentStudentsForAttendance.length} estudiantes`, 
+                    'success'
+                );
+            }
+
+            setTimeout(() => {
+                this.loadStudentsInAttendanceTable();
+            }, 500);
+
+        } catch (error) {
+            console.error('Error al guardar asistencia:', error);
+            if (window.app) {
+                window.app.showNotification('Error al guardar la asistencia', 'error');
+            }
+        }
+    }
+
+    setupRealTimeUpdates() {
+        // Suscribirse a actualizaciones en tiempo real de estudiantes
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.students = students || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de cursos
+        this.unsubscribeCourses = realtimeManager.subscribe('courses', (courses) => {
+            this.courses = courses || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de grupos
+        this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
+            this.groups = groups || {};
+            this.updateAttendanceGroupFilter();
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de notas
+        this.unsubscribeGrades = realtimeManager.subscribe('grades', (grades) => {
+            this.grades = grades || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones en tiempo real de asistencia
+        this.unsubscribeAttendance = realtimeManager.subscribe('attendance', (attendance) => {
+            this.attendance = attendance || {};
+            // Solo actualizar la tabla de asistencia si está visible
+            if (document.getElementById('integratedAttendanceTable')) {
+                this.loadAttendanceStudentsInTable();
+            }
+        });
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeStudents) this.unsubscribeStudents();
+        if (this.unsubscribeCourses) this.unsubscribeCourses();
+        if (this.unsubscribeGroups) this.unsubscribeGroups();
+        if (this.unsubscribeGrades) this.unsubscribeGrades();
+        if (this.unsubscribeAttendance) this.unsubscribeAttendance();
     }
 
     async loadAllData() {
@@ -92,7 +819,7 @@ class GradesManager {
                 return;
             }
 
-            const collections = ['students', 'courses', 'groups', 'grades', 'evaluations'];
+            const collections = ['students', 'courses', 'groups', 'grades', 'evaluations', 'attendance'];
             
             const promises = collections.map(async (collection) => {
                 const collectionRef = ref(db, collection);
@@ -117,6 +844,7 @@ class GradesManager {
 
             await Promise.all(promises);
             this.updateFilters();
+            this.updateAttendanceGroupFilter();
             this.applyFilters();
         } catch (error) {
             console.error('Error al cargar datos de notas:', error);

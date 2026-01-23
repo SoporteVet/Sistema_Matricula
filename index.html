@@ -81,9 +81,6 @@
                         <li><a href="#" data-section="payments" class="nav-link">
                             <i class="fas fa-credit-card"></i> Pagos
                         </a></li>
-                        <li><a href="#" data-section="attendance" class="nav-link">
-                            <i class="fas fa-calendar-check"></i> Asistencia
-                        </a></li>
                         <li><a href="#" data-section="cronograma" class="nav-link" >
                             <i class="fas fa-calendar-alt"></i> Cronograma
                             </a>
@@ -92,7 +89,7 @@
                             <i class="fas fa-graduation-cap"></i> Historial Académico
                         </a></li>
                         <li><a href="#" data-section="grades" class="nav-link">
-                            <i class="fas fa-clipboard-check"></i> Sistema de Notas
+                            <i class="fas fa-clipboard-check"></i> Sistema de Evaluación
                         </a></li>
                         <li><a href="#" data-section="reports" class="nav-link">
                             <i class="fas fa-chart-bar"></i> Reportes
@@ -299,122 +296,6 @@
                         </div>
                     </section>
 
-                    <!-- Attendance Section -->
-                    <section id="attendance" class="content-section">
-                        <div class="section-header">
-                            <h2>Control de Asistencia</h2>
-                        </div>
-                        
-                        <!-- Filters for Loading Students -->
-                        <div class="attendance-filters">
-                            <div class="filter-row">
-                                <div class="form-group">
-                                    <label for="attendanceGroupFilter">Grupo *</label>
-                                    <select id="attendanceGroupFilter" required>
-                                        <option value="">Seleccionar grupo</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="attendanceCourseFilter">Materia *</label>
-                                    <select id="attendanceCourseFilter" required>
-                                        <option value="">Seleccionar materia</option>
-                                        <option value="Anatomía">ATV001-Anatomía</option>
-                                        <option value="Zootecnia y Nutrición">ATV002-Zootecnia y Nutrición</option>
-                                        <option value="Fisiología">ATV003-Fisiología</option>
-                                        <option value="Patología">ATV004-Patología</option>
-                                        <option value="Terminología y Ética">ATV005-Terminología y Ética</option>
-                                        <option value="Enfermedades Infecciosas">ATV006-Enfermedades Infecciosas</option>
-                                        <option value="Enfermedades Parasitarias">ATV007-Enfermedades Parasitarias</option>
-                                        <option value="Farmacología">ATV008-Farmacología</option>
-                                        <option value="Laboratorio Clínico">ATV009-Laboratorio Clínico</option>
-                                        <option value="Examen Clínico">ATV010-Examen Clínico</option>
-                                        <option value="Manejo Clínico">ATV011-Manejo Clínico</option>
-                                        <option value="Asistencia de Quirófano">ATV012-Asistencia de Quirófano</option>
-                                        <option value="Proyecto Final">ATV013-Proyecto Final</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="attendanceTeacherFilter">Profesor *</label>
-                                    <select id="attendanceTeacherFilter" required>
-                                        <option value="">Seleccionar profesor</option>
-                                        <option value="Randall Azofeifa">Randall Azofeifa</option>
-                                        <option value="Javier Artavia">Javier Artavia</option>
-                                        <option value="Abel Castro">Abel Castro</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="attendanceSchedule">Horario *</label>
-                                    <input type="text" id="attendanceSchedule" placeholder="Ej: Lunes - Martes 6pm - 10pm" required>
-                                </div>
-                                <div class="form-group">
-                                    <button id="saveAttendanceBtn" class="btn-primary" style="display: none;">
-                                        <i class="fas fa-save"></i> Guardar Asistencia
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Calendar Section -->
-                        <div class="attendance-calendar-section">
-                            <div class="calendar-header-section">
-                                <h3>Seleccionar Fechas de Asistencia</h3>
-                                <div class="calendar-controls">
-                                    <button id="clearAllDates" class="btn-clear">Borrar</button>
-                                    <button id="selectToday" class="btn-today">Hoy</button>
-                                </div>
-                            </div>
-                            
-                            <div class="attendance-calendar-container">
-                                <div class="attendance-calendar-wrapper">
-                                    <div class="attendance-calendar-header">
-                                        <span id="attendanceCurrentMonthYear">septiembre de 2025</span>
-                                        <div class="attendance-calendar-nav">
-                                            <button id="attendancePrevMonth" class="attendance-nav-btn">
-                                                <i class="fas fa-chevron-up"></i>
-                                            </button>
-                                            <button id="attendanceNextMonth" class="attendance-nav-btn">
-                                                <i class="fas fa-chevron-down"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div id="attendanceCalendarGrid" class="attendance-calendar-grid">
-                                        <!-- El calendario se generará dinámicamente -->
-                                    </div>
-                                </div>
-                                
-                                <div class="selected-dates-panel">
-                                    <h4>Fechas seleccionadas:</h4>
-                                    <div id="selectedDatesList" class="selected-dates-list">
-                                        <!-- Las fechas seleccionadas aparecerán aquí -->
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Attendance Table with Students -->
-                        <div class="table-container attendance-table-container">
-                            <table id="attendanceTable" class="data-table attendance-table">
-                                <thead>
-                                    <tr>
-                                        <th>Grupo</th>
-                                        <th>Fecha de inicio</th>
-                                        <th>Nombre del estudiante</th>
-                                        <th>Identificación</th>
-                                        <th>Teléfono</th>
-                                        <th>Correo electrónico</th>
-                                        <!-- Las columnas de fechas se agregarán dinámicamente -->
-                                        <th>Materia</th>
-                                        <th>Profesor</th>
-                                        <th>Horario</th>
-                                        <th>Nota final</th>
-                                        <th>Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </section>
-
                     <!-- Groups Section -->
                     <section id="groups" class="content-section">
                         <div class="section-header">
@@ -497,35 +378,165 @@
                         </div>
                     </section>
 
-                    <!-- Grades Section -->
+                    <!-- Grades Section (Sistema de Evaluación con Notas + Asistencia) -->
                     <section id="grades" class="content-section">
                         <div class="section-header">
-                            <h2>Sistema de Notas</h2>
-                            <button id="addEvaluationBtn" class="btn-primary">
-                                <i class="fas fa-plus"></i> Nueva Evaluación
-                            </button>
+                            <h2>Sistema de Evaluación</h2>
                         </div>
-                        <div class="filters">
-                            <select id="gradesGroupFilter">
-                                <option value="">Seleccionar grupo</option>
-                            </select>
-                            <select id="evaluationFilter">
-                                <option value="">Todas las evaluaciones</option>
-                            </select>
+                        
+                        <!-- Tabs Navigation -->
+                        <div class="tabs-container">
+                            <div class="tabs-nav">
+                                <button class="tab-btn active" data-tab="evaluations-tab">
+                                    <i class="fas fa-clipboard-check"></i> Evaluaciones
+                                </button>
+                                <button class="tab-btn" data-tab="grades-attendance-tab">
+                                    <i class="fas fa-calendar-check"></i> Asistencia
+                                </button>
+                            </div>
                         </div>
-                        <div class="table-container">
-                            <table id="gradesTable" class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Estudiante</th>
-                                        <th>ID</th>
-                                        <th>Promedio</th>
-                                        <th>Estado</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
+
+                        <!-- Evaluations Tab -->
+                        <div id="evaluations-tab" class="tab-content active">
+                            <div class="tab-header">
+                                <button id="addEvaluationBtn" class="btn-primary">
+                                    <i class="fas fa-plus"></i> Nueva Evaluación
+                                </button>
+                            </div>
+                            <div class="filters">
+                                <select id="gradesGroupFilter">
+                                    <option value="">Seleccionar grupo</option>
+                                </select>
+                                <select id="evaluationFilter">
+                                    <option value="">Todas las evaluaciones</option>
+                                </select>
+                            </div>
+                            <div class="table-container">
+                                <table id="gradesTable" class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Estudiante</th>
+                                            <th>ID</th>
+                                            <th>Promedio</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Attendance Tab (dentro del Sistema de Evaluación) -->
+                        <div id="grades-attendance-tab" class="tab-content">
+                            <!-- Filters for Loading Students -->
+                            <div class="attendance-filters">
+                                <div class="filter-row">
+                                    <div class="form-group">
+                                        <label for="gradesAttendanceGroupFilter">Grupo *</label>
+                                        <select id="gradesAttendanceGroupFilter" required>
+                                            <option value="">Seleccionar grupo</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="gradesAttendanceCourseFilter">Materia *</label>
+                                        <select id="gradesAttendanceCourseFilter" required>
+                                            <option value="">Seleccionar materia</option>
+                                            <option value="Anatomía">ATV001-Anatomía</option>
+                                            <option value="Zootecnia y Nutrición">ATV002-Zootecnia y Nutrición</option>
+                                            <option value="Fisiología">ATV003-Fisiología</option>
+                                            <option value="Patología">ATV004-Patología</option>
+                                            <option value="Terminología y Ética">ATV005-Terminología y Ética</option>
+                                            <option value="Enfermedades Infecciosas">ATV006-Enfermedades Infecciosas</option>
+                                            <option value="Enfermedades Parasitarias">ATV007-Enfermedades Parasitarias</option>
+                                            <option value="Farmacología">ATV008-Farmacología</option>
+                                            <option value="Laboratorio Clínico">ATV009-Laboratorio Clínico</option>
+                                            <option value="Examen Clínico">ATV010-Examen Clínico</option>
+                                            <option value="Manejo Clínico">ATV011-Manejo Clínico</option>
+                                            <option value="Asistencia de Quirófano">ATV012-Asistencia de Quirófano</option>
+                                            <option value="Proyecto Final">ATV013-Proyecto Final</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="gradesAttendanceTeacherFilter">Profesor *</label>
+                                        <select id="gradesAttendanceTeacherFilter" required>
+                                            <option value="">Seleccionar profesor</option>
+                                            <option value="Randall Azofeifa">Randall Azofeifa</option>
+                                            <option value="Javier Artavia">Javier Artavia</option>
+                                            <option value="Abel Castro">Abel Castro</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="gradesAttendanceSchedule">Horario *</label>
+                                        <input type="text" id="gradesAttendanceSchedule" placeholder="Ej: Lunes - Martes 6pm - 10pm" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <button id="saveGradesAttendanceBtn" class="btn-primary" style="display: none;">
+                                            <i class="fas fa-save"></i> Guardar Asistencia
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Calendar Section -->
+                            <div class="attendance-calendar-section">
+                                <div class="calendar-header-section">
+                                    <h3>Seleccionar Fechas de Asistencia</h3>
+                                    <div class="calendar-controls">
+                                        <button id="gradesAttendanceClearDates" class="btn-clear">Borrar</button>
+                                        <button id="gradesAttendanceSelectToday" class="btn-today">Hoy</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="attendance-calendar-container">
+                                    <div class="attendance-calendar-wrapper">
+                                        <div class="attendance-calendar-header">
+                                            <span id="gradesAttendanceMonthYear">septiembre de 2025</span>
+                                            <div class="attendance-calendar-nav">
+                                                <button id="gradesAttendancePrevMonth" class="attendance-nav-btn">
+                                                    <i class="fas fa-chevron-up"></i>
+                                                </button>
+                                                <button id="gradesAttendanceNextMonth" class="attendance-nav-btn">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="gradesAttendanceCalendarGrid" class="attendance-calendar-grid">
+                                            <!-- El calendario se generará dinámicamente -->
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="selected-dates-panel">
+                                        <h4>Fechas seleccionadas:</h4>
+                                        <div id="gradesSelectedDatesList" class="selected-dates-list">
+                                            <!-- Las fechas seleccionadas aparecerán aquí -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Attendance Table with Students -->
+                            <div class="table-container attendance-table-container">
+                                <table id="gradesAttendanceTable" class="data-table attendance-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Grupo</th>
+                                            <th>Fecha de inicio</th>
+                                            <th>Nombre del estudiante</th>
+                                            <th>Identificación</th>
+                                            <th>Teléfono</th>
+                                            <th>Correo electrónico</th>
+                                            <!-- Las columnas de fechas se agregarán dinámicamente -->
+                                            <th>Materia</th>
+                                            <th>Profesor</th>
+                                            <th>Horario</th>
+                                            <th>Nota final</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
                         </div>
                     </section>
 

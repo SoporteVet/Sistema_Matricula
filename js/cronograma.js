@@ -6,6 +6,7 @@ import {
     set, 
     remove 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { realtimeManager } from './realtime-manager.js';
 
 class CronogramaManager {
     constructor() {
@@ -70,6 +71,75 @@ class CronogramaManager {
 
         // Escuchar cambios en el GroupsManager
         this.setupGroupsSync();
+        
+        // Configurar actualización en tiempo real
+        this.setupRealTimeUpdates();
+    }
+
+    setupRealTimeUpdates() {
+        // Suscribirse a actualizaciones en tiempo real de eventos del cronograma
+        this.unsubscribeEvents = realtimeManager.subscribe('cronograma_events', (events) => {
+            if (!events) {
+                this.events = [];
+                this.filteredEvents = [];
+            } else {
+                this.events = [];
+                Object.keys(events).forEach(key => {
+                    const eventData = events[key];
+                    let eventDate;
+                    if (eventData.date) {
+                        if (eventData.date.includes('T')) {
+                            eventDate = new Date(eventData.date);
+                        } else {
+                            const [year, month, day] = eventData.date.split('-');
+                            eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                            if (eventData.time) {
+                                const [hours, minutes] = eventData.time.split(':');
+                                eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                            }
+                        }
+                    } else {
+                        eventDate = new Date();
+                    }
+                    
+                    this.events.push({
+                        id: key,
+                        ...eventData,
+                        date: eventDate
+                    });
+                });
+                
+                this.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+                this.filteredEvents = [...this.events];
+            }
+            
+            // Solo renderizar si estamos inicializados
+            if (this.initialized) {
+                this.renderCalendar();
+                this.renderEventsTable();
+            }
+        });
+        
+        // Suscribirse a actualizaciones de grupos para los filtros
+        this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
+            if (groups) {
+                this.groups = Object.keys(groups).map(key => {
+                    const groupData = groups[key];
+                    return {
+                        id: key,
+                        name: groupData.name || groupData.groupName || `Grupo ${key}`,
+                        ...groupData
+                    };
+                });
+                this.loadGroupFilters();
+            }
+        });
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeEvents) this.unsubscribeEvents();
+        if (this.unsubscribeGroups) this.unsubscribeGroups();
     }
 
     async loadGroups() {

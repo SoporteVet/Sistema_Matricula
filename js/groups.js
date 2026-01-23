@@ -3,10 +3,10 @@ import {
     push, 
     set, 
     get, 
-    remove, 
-    onValue 
+    remove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { db } from './firebase-config.js';
+import { realtimeManager } from './realtime-manager.js';
 
 class GroupsManager {
     constructor() {
@@ -56,16 +56,30 @@ class GroupsManager {
     }
 
     setupRealTimeUpdates() {
-        const groupsRef = ref(db, 'groups');
-        onValue(groupsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                this.groups = snapshot.val();
+        // Suscribirse a actualizaciones en tiempo real de grupos
+        this.unsubscribeGroups = realtimeManager.subscribe('groups', (groups) => {
+            this.groups = groups || {};
+            this.applyFilters();
+        });
+        
+        // Suscribirse a actualizaciones de estudiantes para contar estudiantes por grupo
+        this.unsubscribeStudents = realtimeManager.subscribe('students', (students) => {
+            this.students = students || {};
+            // Solo actualizar si estamos viendo la tabla de grupos
+            if (document.getElementById('groupsTable')) {
                 this.applyFilters();
-            } else {
-                this.groups = {};
-                this.renderGroupsTable();
             }
         });
+    }
+
+    // Limpiar suscripciones al destruir el módulo
+    destroy() {
+        if (this.unsubscribeGroups) {
+            this.unsubscribeGroups();
+        }
+        if (this.unsubscribeStudents) {
+            this.unsubscribeStudents();
+        }
     }
 
     async loadGroups() {
