@@ -7,7 +7,10 @@ class ReportsManager {
             students: {},
             courses: {},
             payments: {},
-            attendance: {}
+            attendance: {},
+            evaluations: {},
+            grades: {},
+            groups: {}
         };
         this.isLoading = false;
         // No inicializar automáticamente, esperar a que la app esté lista
@@ -55,64 +58,63 @@ class ReportsManager {
     }
 
     async loadReports() {
-        console.log('ReportsManager.loadReports() llamado desde:', new Error().stack);
-        
+        if (!db) {
+            console.warn('ReportsManager: base de datos no disponible');
+            return;
+        }
+
+        // Si ya hay una carga en curso, esperar a que termine
+        if (this.isLoading) {
+            await new Promise(resolve => {
+                const interval = setInterval(() => {
+                    if (!this.isLoading) { clearInterval(interval); resolve(); }
+                }, 100);
+            });
+            return;
+        }
+
+        this.isLoading = true;
         try {
-            // Verificar que la base de datos esté disponible
-            if (!db) {
-                console.warn('Base de datos no disponible para reportes');
-                return;
-            }
-
-            // Verificar que el usuario esté autenticado
-            if (!window.auth || !window.auth.currentUser) {
-                console.warn('ReportsManager: Usuario no autenticado, no se pueden cargar reportes');
-                return;
-            }
-
-            // Verificar que la aplicación esté inicializada
-            if (!window.app || !window.app.initialized) {
-                console.warn('ReportsManager: Aplicación no inicializada, esperando...');
-                setTimeout(() => this.loadReports(), 2000);
-                return;
-            }
-
-            // Verificación adicional: asegurar que no se ejecute múltiples veces
-            if (this.isLoading) {
-                console.log('ReportsManager: Ya se está cargando, saltando...');
-                return;
-            }
-
-            this.isLoading = true;
-            console.log('ReportsManager: Iniciando carga de datos...');
-
-            // Cargar todos los datos necesarios para los reportes
-            const [studentsSnapshot, coursesSnapshot, paymentsSnapshot, attendanceSnapshot] = await Promise.all([
+            const [studentsSnap, coursesSnap, paymentsSnap, attendanceSnap, evaluationsSnap, gradesSnap, groupsSnap] = await Promise.all([
                 get(ref(db, 'students')),
                 get(ref(db, 'courses')),
                 get(ref(db, 'payments')),
-                get(ref(db, 'attendance'))
+                get(ref(db, 'attendance')),
+                get(ref(db, 'evaluations')),
+                get(ref(db, 'grades')),
+                get(ref(db, 'groups'))
             ]);
 
-            this.data.students = studentsSnapshot.exists() ? studentsSnapshot.val() : {};
-            this.data.courses = coursesSnapshot.exists() ? coursesSnapshot.val() : {};
-            this.data.payments = paymentsSnapshot.exists() ? paymentsSnapshot.val() : {};
-            this.data.attendance = attendanceSnapshot.exists() ? attendanceSnapshot.val() : {};
-
-            console.log('Datos de reportes cargados correctamente');
-
+            this.data.students    = studentsSnap.exists()    ? studentsSnap.val()    : {};
+            this.data.courses     = coursesSnap.exists()     ? coursesSnap.val()     : {};
+            this.data.payments    = paymentsSnap.exists()    ? paymentsSnap.val()    : {};
+            this.data.attendance  = attendanceSnap.exists()  ? attendanceSnap.val()  : {};
+            this.data.evaluations = evaluationsSnap.exists() ? evaluationsSnap.val() : {};
+            this.data.grades      = gradesSnap.exists()      ? gradesSnap.val()      : {};
+            this.data.groups      = groupsSnap.exists()      ? groupsSnap.val()      : {};
         } catch (error) {
             console.error('Error al cargar datos para reportes:', error);
-            // Solo mostrar notificación si es un error crítico y la app está inicializada
-            if (window.app && window.app.initialized && error.code !== 'PERMISSION_DENIED') {
-                window.app.showNotification('Error al cargar datos para reportes', 'error');
-            }
         } finally {
             this.isLoading = false;
         }
     }
 
-    showReportModal(reportType) {
+    async showReportModal(reportType) {
+        // Mostrar modal de carga mientras se obtienen los datos
+        if (window.app) {
+            window.app.showModal(`
+                <div class="modal-header">
+                    <h3><i class="fas fa-spinner fa-spin"></i> Cargando datos…</h3>
+                </div>
+                <div style="padding:30px;text-align:center;color:#6c757d;">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p style="margin-top:12px;">Obteniendo información, un momento…</p>
+                </div>
+            `);
+        }
+
+        await this.loadReports();
+
         let modalContent = '';
 
         switch (reportType) {
@@ -128,12 +130,34 @@ class ReportsManager {
             case 'academic':
                 modalContent = this.getAcademicReportModal();
                 break;
+            case 'grades-report':
+                modalContent = this.getGradesReportModal();
+                break;
             default:
                 return;
         }
 
         if (window.app) {
             window.app.showModal(modalContent);
+            // Conectar listeners que no pueden ir como <script> dentro del innerHTML
+            this.setupModalListeners(reportType);
+        }
+    }
+
+    setupModalListeners(reportType) {
+        if (reportType === 'grades-report') {
+            const scope      = document.getElementById('grReportScope');
+            const groupRow   = document.getElementById('grGroupRow');
+            const studentRow = document.getElementById('grStudentRow');
+            if (!scope) return;
+
+            const toggleRows = () => {
+                if (groupRow)   groupRow.style.display   = scope.value === 'group'   ? '' : 'none';
+                if (studentRow) studentRow.style.display = scope.value === 'student' ? '' : 'none';
+            };
+
+            scope.addEventListener('change', toggleRows);
+            toggleRows(); // aplicar estado inicial
         }
     }
 
@@ -347,57 +371,50 @@ class ReportsManager {
     }
 
     getAcademicReportModal() {
+        const sortedStudents = Object.entries(this.data.students)
+            .map(([id, s]) => ({ id, ...s }))
+            .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+
+        const studentOptions = sortedStudents.map(s =>
+            `<option value="${s.id}">${s.firstName} ${s.lastName}${s.studentId ? ' — ' + s.studentId : ''}</option>`
+        ).join('');
+
         return `
             <div class="modal-header">
                 <h3>
-                    <i class="fas fa-graduation-cap"></i> 
-                    Historial Académico
+                    <i class="fas fa-graduation-cap"></i>
+                    Historial Académico — PDF por Estudiante
                 </h3>
-                <button class="close-modal">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button class="close-modal"><i class="fas fa-times"></i></button>
             </div>
-            
+
             <form id="academicReportForm" class="handled">
                 <div class="form-group">
                     <label for="academicStudent">Estudiante</label>
                     <select id="academicStudent" required>
-                        <option value="">Seleccionar estudiante</option>
-                        <option value="all">Todos los estudiantes</option>
-                        ${Object.entries(this.data.students).map(([id, student]) => `
-                            <option value="${id}">${student.firstName} ${student.lastName} - ${student.studentId}</option>
-                        `).join('')}
+                        <option value="">Seleccionar estudiante…</option>
+                        ${studentOptions}
                     </select>
+                    <small style="color:#6c757d;margin-top:4px;display:block;">
+                        Se genera un PDF individual para el estudiante seleccionado.
+                    </small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Información a Incluir</label>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                        <label><input type="checkbox" id="includeStudentInfo" checked> Información del Estudiante</label>
-                        <label><input type="checkbox" id="includeCourseInfo" checked> Información del Curso</label>
-                        <label><input type="checkbox" id="includePaymentHistory" checked> Historial de Pagos</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+                        <label><input type="checkbox" id="includeStudentInfo"      checked> Información del Estudiante</label>
+                        <label><input type="checkbox" id="includeCourseInfo"       checked> Información del Curso</label>
+                        <label><input type="checkbox" id="includePaymentHistory"   checked> Historial de Pagos</label>
                         <label><input type="checkbox" id="includeAttendanceHistory" checked> Historial de Asistencia</label>
-                        <label><input type="checkbox" id="includePerformanceStats" checked> Estadísticas de Rendimiento</label>
-                        <label><input type="checkbox" id="includeProgressNotes"> Notas de Progreso</label>
+                        <label><input type="checkbox" id="includePerformanceStats" checked> Notas y Evaluaciones</label>
                     </div>
                 </div>
-                
-                <div class="form-group">
-                    <label for="academicFormat">Formato de Exportación</label>
-                    <select id="academicFormat" required>
-                        <option value="pdf">PDF</option>
-                        <option value="excel">Excel (.xlsx)</option>
-                        <option value="preview">Vista Previa</option>
-                    </select>
-                </div>
-                
+
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
-                        Cancelar
-                    </button>
+                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">Cancelar</button>
                     <button type="submit" class="btn-primary">
-                        <i class="fas fa-download"></i> 
-                        Generar Reporte
+                        <i class="fas fa-file-pdf"></i> Generar PDF
                     </button>
                 </div>
             </form>
@@ -844,6 +861,386 @@ class ReportsManager {
         };
         return statusMap[status] || status;
     }
+
+    // ─── Reporte General de Notas ────────────────────────────────────────────
+
+    getGradesReportModal() {
+        const groupOptions = Object.entries(this.data.groups)
+            .filter(([, g]) => g.status === 'active')
+            .map(([id, g]) => `<option value="${id}">${g.groupCode || ''} - ${g.groupName || ''}</option>`)
+            .join('');
+
+        const studentOptions = Object.entries(this.data.students)
+            .map(([id, s]) => `<option value="${id}">${s.firstName} ${s.lastName} — ${s.studentId || ''}</option>`)
+            .join('');
+
+        return `
+            <div class="modal-header">
+                <h3><i class="fas fa-file-alt"></i> Reporte General de Notas</h3>
+                <button class="close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="gradesReportForm" class="handled">
+                <div class="form-group">
+                    <label for="grReportScope">¿Para quién generar?</label>
+                    <select id="grReportScope" required>
+                        <option value="all">Todos los estudiantes</option>
+                        <option value="group">Por grupo</option>
+                        <option value="student">Estudiante específico</option>
+                    </select>
+                </div>
+                <div class="form-group" id="grGroupRow" style="display:none;">
+                    <label for="grReportGroup">Grupo</label>
+                    <select id="grReportGroup">
+                        <option value="">Seleccionar grupo</option>
+                        ${groupOptions}
+                    </select>
+                </div>
+                <div class="form-group" id="grStudentRow" style="display:none;">
+                    <label for="grReportStudent">Estudiante</label>
+                    <select id="grReportStudent">
+                        <option value="">Seleccionar estudiante</option>
+                        ${studentOptions}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Incluir en el PDF</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                        <label><input type="checkbox" id="grIncludeInfo"       checked> Datos del estudiante</label>
+                        <label><input type="checkbox" id="grIncludeEvals"      checked> Evaluaciones por rubro</label>
+                        <label><input type="checkbox" id="grIncludeAttendance" checked> Asistencia</label>
+                        <label><input type="checkbox" id="grIncludeAverage"    checked> Promedio final</label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="window.app.closeModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-file-pdf"></i> Generar PDF
+                    </button>
+                </div>
+            </form>
+        `;
+    }
+
+    async generateGradesReportPDF(filters) {
+        const { scope, groupId, studentId, includeInfo, includeEvals, includeAttendance, includeAverage } = filters;
+
+        if (!window.jspdf) {
+            if (window.app) window.app.showNotification('Librería PDF no disponible', 'error');
+            return;
+        }
+
+        let studentsToReport = [];
+
+        if (scope === 'student' && studentId) {
+            const s = this.data.students[studentId];
+            if (s) studentsToReport = [{ id: studentId, ...s }];
+        } else if (scope === 'group' && groupId) {
+            const group = this.data.groups[groupId];
+            if (!group) return;
+            studentsToReport = Object.entries(this.data.students)
+                .filter(([, s]) => s.group === groupId || s.group === group.groupName || s.group === group.groupCode)
+                .map(([id, s]) => ({ id, ...s }));
+        } else {
+            studentsToReport = Object.entries(this.data.students).map(([id, s]) => ({ id, ...s }));
+        }
+
+        if (studentsToReport.length === 0) {
+            if (window.app) window.app.showNotification('No se encontraron estudiantes para los criterios seleccionados', 'error');
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const PAGE_W = 210;
+        const PAGE_H = 297;
+        const MX = 12;
+        const RIGHT = PAGE_W - MX;
+        const MAX_Y = PAGE_H - 14;
+        const COLORS = {
+            primary: [30, 60, 114],   // #1e3c72
+            secondary: [42, 82, 152], // #2a5298
+            accent: [96, 165, 250],   // #60a5fa
+            text: [31, 41, 55],
+            muted: [107, 114, 128],
+            light: [239, 246, 255],
+            border: [203, 213, 225],
+            white: [255, 255, 255]
+        };
+        const logoDataUrl = await this.loadPdfLogoDataUrl();
+        const evalTypeLabel = {
+            exam: 'Examen',
+            quiz: 'Quiz',
+            assignment: 'Tarea',
+            project: 'Proyecto',
+            participation: 'Participacion',
+            attendance: 'Asistencia',
+            lab: 'Laboratorio'
+        };
+        const safeDate = (v) => {
+            try { return new Intl.DateTimeFormat('es-ES').format(new Date(v)); } catch { return v || '-'; }
+        };
+        const statusFromAverage = (avg) => avg >= 70 ? 'Aprobado' : avg >= 60 ? 'Condicional' : 'Reprobado';
+
+        let currentStudentName = '';
+        const drawHeader = () => {
+            // Base header bands
+            doc.setFillColor(...COLORS.primary);
+            doc.rect(0, 0, PAGE_W, 30, 'F');
+            doc.setFillColor(...COLORS.secondary);
+            doc.rect(0, 30, PAGE_W, 5, 'F');
+            doc.setFillColor(...COLORS.accent);
+            doc.rect(0, 35, PAGE_W, 1.2, 'F');
+
+            if (logoDataUrl) {
+                try { doc.addImage(logoDataUrl, 'PNG', MX, 6, 16, 16); } catch {}
+            }
+
+            // Institution text
+            doc.setTextColor(...COLORS.white);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(15);
+            doc.text('Instituto SMP', MX + 22, 12);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('Sistema de Gestion Academica', MX + 22, 18);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.text('Historial Academico de Notas', MX + 22, 25);
+
+            // Right-side metadata (sin recuadro)
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.6);
+            doc.setTextColor(...COLORS.white);
+            doc.text(`Web: www.institutosmp.com`, RIGHT, 11.5, { align: 'right' });
+            doc.text(`Correo: institutosanmartin01@gmail.com`, RIGHT, 16.8, { align: 'right' });
+            doc.text(`Telefono: +506 8369-9183`, RIGHT, 22.1, { align: 'right' });
+            doc.text(`Fecha: ${safeDate(new Date().toISOString())}`, RIGHT, 27.4, { align: 'right' });
+        };
+
+        const sectionTitle = (text, y, filled = true) => {
+            if (filled) {
+                doc.setFillColor(...COLORS.light);
+            } else {
+                doc.setFillColor(...COLORS.white);
+            }
+            doc.setDrawColor(...COLORS.border);
+            doc.roundedRect(MX, y - 5, RIGHT - MX, 8, 1.5, 1.5, 'FD');
+            doc.setTextColor(...COLORS.primary);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.text(text, MX + 2, y);
+            return y + 6;
+        };
+
+        const ensureSpace = (y, needed) => {
+            if (y + needed <= MAX_Y) return y;
+            doc.addPage();
+            drawHeader();
+            return 44;
+        };
+
+        const drawTableHeader = (y, columns) => {
+            doc.setFillColor(...COLORS.secondary);
+            doc.rect(MX, y - 4.5, RIGHT - MX, 7, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            doc.setTextColor(...COLORS.white);
+            columns.forEach(c => doc.text(c.label, c.x, y));
+            return y + 5.5;
+        };
+
+        const drawTableRow = (y, columns, row, zebra) => {
+            if (zebra) {
+                doc.setFillColor(248, 250, 252);
+                doc.rect(MX, y - 4, RIGHT - MX, 6, 'F');
+            }
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(...COLORS.text);
+            columns.forEach(c => {
+                const value = row[c.key] ?? '-';
+                const wrapped = doc.splitTextToSize(String(value), c.maxWidth || 30);
+                doc.text(wrapped[0] || '-', c.x, y);
+            });
+            return y + 6;
+        };
+
+        for (let i = 0; i < studentsToReport.length; i++) {
+            if (i > 0) doc.addPage();
+            let y = 44;
+            const student = studentsToReport[i];
+            currentStudentName = `${student.firstName || ''} ${student.lastName || ''}`.trim() || '-';
+            drawHeader();
+
+            const studentIdValue = student.studentId || student.id || '-';
+            const studentGrades = Object.values(this.data.grades).filter(g => g.studentId === studentIdValue);
+            const evals = Object.entries(this.data.evaluations)
+                .map(([id, ev]) => ({ id, ...ev }))
+                .filter(ev => studentGrades.some(g => g.evaluationId === ev.id))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            const gradeRows = evals.map(ev => {
+                const grade = studentGrades.find(g => g.evaluationId === ev.id);
+                return { ...ev, score: grade ? Number(grade.score) : null, comments: grade?.comments || '' };
+            });
+            const studentSubject = evals.find(ev => ev.course)?.course || student.course || '-';
+
+            let totalWeight = 0;
+            let weightedScore = 0;
+            gradeRows.forEach(r => {
+                if (typeof r.score !== 'number') return;
+                const w = Number(r.weight || 0);
+                totalWeight += w;
+                weightedScore += (r.score * w / 100);
+            });
+            const average = totalWeight > 0 ? (weightedScore / totalWeight) * 100 : 0;
+
+            const perType = {};
+            gradeRows.forEach(r => {
+                if (!perType[r.type]) perType[r.type] = [];
+                perType[r.type].push(r);
+            });
+
+            const attendanceRecords = Object.values(this.data.attendance)
+                .filter(r => r.studentId === studentIdValue)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            const attendanceCounts = { P: 0, A: 0, T: 0 };
+            attendanceRecords.forEach(r => {
+                if (attendanceCounts[r.status] !== undefined) attendanceCounts[r.status] += 1;
+            });
+            const attendanceTotal = attendanceRecords.length;
+            const attendancePct = attendanceTotal > 0 ? (attendanceCounts.P / attendanceTotal) * 100 : 0;
+
+            y = sectionTitle('Informacion del Estudiante', y, true);
+            doc.setDrawColor(...COLORS.border);
+            doc.rect(MX, y - 2, RIGHT - MX, 22);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(...COLORS.text);
+            doc.text(`Nombre: ${currentStudentName}`, MX + 2, y + 3);
+            doc.text(`ID: ${studentIdValue}`, MX + 2, y + 8);
+            doc.text(`Cedula: ${student.cedula || '-'}`, MX + 2, y + 13);
+            doc.text(`Curso/Grupo: ${student.course || student.group || '-'}`, MX + 96, y + 3);
+            doc.text(`Correo: ${student.email || '-'}`, MX + 96, y + 8);
+            doc.text(`Materia: ${studentSubject}`, MX + 96, y + 13);
+            if (includeAverage) {
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Promedio Final: ${average.toFixed(1)} (${statusFromAverage(average)})`, MX + 2, y + 18);
+            }
+            y += 26;
+
+            if (includeAttendance) {
+                y = ensureSpace(y, 20);
+                y = sectionTitle('Asistencia', y);
+                const attColumns = [
+                    { key: 'metric', label: 'Metrica', x: MX + 2, maxWidth: 70 },
+                    { key: 'value', label: 'Valor', x: MX + 80, maxWidth: 40 }
+                ];
+                y = drawTableHeader(y, attColumns);
+                const attRows = [
+                    { metric: 'Total registros', value: attendanceTotal },
+                    { metric: 'Presentes (P)', value: attendanceCounts.P },
+                    { metric: 'Ausentes (A)', value: attendanceCounts.A },
+                    { metric: 'Tardias (T)', value: attendanceCounts.T },
+                    { metric: 'Porcentaje asistencia', value: `${attendancePct.toFixed(1)}%` }
+                ];
+                attRows.forEach((r, idx) => { y = drawTableRow(y, attColumns, r, idx % 2 === 1); });
+                y += 2;
+            }
+
+            if (includeEvals) {
+                y = ensureSpace(y, 24);
+                y = sectionTitle('Resumen por Tipo de Evaluacion', y);
+                const sumCols = [
+                    { key: 'type', label: 'Tipo', x: MX + 2, maxWidth: 40 },
+                    { key: 'avg', label: 'Promedio', x: MX + 58, maxWidth: 22 },
+                    { key: 'count', label: 'Eval. con nota', x: MX + 90, maxWidth: 35 },
+                    { key: 'weight', label: 'Peso acumulado', x: MX + 130, maxWidth: 30 }
+                ];
+                y = drawTableHeader(y, sumCols);
+                const summaryRows = Object.entries(perType).map(([type, rows]) => {
+                    const graded = rows.filter(r => typeof r.score === 'number');
+                    const tw = graded.reduce((s, r) => s + Number(r.weight || 0), 0);
+                    const ts = graded.reduce((s, r) => s + (r.score * Number(r.weight || 0) / 100), 0);
+                    const tavg = tw > 0 ? (ts / tw) * 100 : 0;
+                    return {
+                        type: evalTypeLabel[type] || type,
+                        avg: tavg.toFixed(1),
+                        count: `${graded.length}/${rows.length}`,
+                        weight: `${tw.toFixed(1)}%`
+                    };
+                });
+                summaryRows.forEach((r, idx) => { y = drawTableRow(y, sumCols, r, idx % 2 === 1); });
+                y += 2;
+
+                y = ensureSpace(y, 20);
+                y = sectionTitle('Detalle de Evaluaciones', y);
+                const detailCols = [
+                    { key: 'date', label: 'Fecha', x: MX + 2, maxWidth: 20 },
+                    { key: 'type', label: 'Tipo', x: MX + 24, maxWidth: 22 },
+                    { key: 'title', label: 'Evaluacion', x: MX + 48, maxWidth: 56 },
+                    { key: 'weight', label: 'Peso', x: MX + 106, maxWidth: 14 },
+                    { key: 'score', label: 'Nota', x: MX + 122, maxWidth: 14 },
+                    { key: 'comments', label: 'Observacion', x: MX + 140, maxWidth: 56 }
+                ];
+                y = drawTableHeader(y, detailCols);
+                gradeRows.forEach((r, idx) => {
+                    y = ensureSpace(y, 7);
+                    const row = {
+                        date: safeDate(r.date),
+                        type: evalTypeLabel[r.type] || r.type,
+                        title: r.title || '-',
+                        weight: `${r.weight || 0}%`,
+                        score: typeof r.score === 'number' ? r.score.toFixed(1) : 'Sin nota',
+                        comments: r.comments || '-'
+                    };
+                    y = drawTableRow(y, detailCols, row, idx % 2 === 1);
+                });
+            }
+
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...COLORS.muted);
+            doc.text('Documento generado automaticamente por Instituto SMP', RIGHT, PAGE_H - 6, { align: 'right' });
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        doc.save(`reporte_notas_${today}.pdf`);
+
+        if (window.app) {
+            window.app.closeModal();
+            window.app.showNotification(`PDF generado con ${studentsToReport.length} estudiante(s)`, 'success');
+        }
+    }
+
+    async loadPdfLogoDataUrl() {
+        if (this._pdfLogoDataUrl) return this._pdfLogoDataUrl;
+
+        try {
+            const dataUrl = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth || img.width;
+                    canvas.height = img.naturalHeight || img.height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('No se pudo obtener contexto de canvas'));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = () => reject(new Error('No se pudo cargar empresa.ico'));
+                img.src = 'empresa.ico';
+            });
+
+            this._pdfLogoDataUrl = dataUrl;
+            return dataUrl;
+        } catch (error) {
+            console.warn('No se pudo preparar el logo para PDF:', error);
+            return null;
+        }
+    }
 }
 
 // Configurar event listeners cuando se carga el DOM
@@ -855,24 +1252,80 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('submit', async (e) => {
             if (e.target.id === 'financialReportForm') {
                 e.preventDefault();
-                
                 const filters = {
                     startDate: document.getElementById('financialStartDate').value,
-                    endDate: document.getElementById('financialEndDate').value,
-                    course: document.getElementById('financialCourse').value
+                    endDate:   document.getElementById('financialEndDate').value,
+                    course:    document.getElementById('financialCourse').value
                 };
                 const format = document.getElementById('financialFormat').value;
-                
                 try {
                     await window.reportsManager.generateFinancialReport(filters, format);
                 } catch (error) {
-                    if (window.app) {
-                        window.app.showNotification('Error al generar el reporte', 'error');
-                    }
+                    if (window.app) window.app.showNotification('Error al generar el reporte', 'error');
                 }
             }
-            
-            // Configurar otros formularios de reportes de manera similar...
+
+            if (e.target.id === 'gradesReportForm') {
+                e.preventDefault();
+                const scope     = document.getElementById('grReportScope').value;
+                const groupId   = document.getElementById('grReportGroup')?.value   || '';
+                const studentId = document.getElementById('grReportStudent')?.value || '';
+
+                if (scope === 'group' && !groupId) {
+                    if (window.app) window.app.showNotification('Seleccione un grupo', 'error');
+                    return;
+                }
+                if (scope === 'student' && !studentId) {
+                    if (window.app) window.app.showNotification('Seleccione un estudiante', 'error');
+                    return;
+                }
+
+                const filters = {
+                    scope,
+                    groupId,
+                    studentId,
+                    includeInfo:       document.getElementById('grIncludeInfo')?.checked       ?? true,
+                    includeEvals:      document.getElementById('grIncludeEvals')?.checked      ?? true,
+                    includeAttendance: document.getElementById('grIncludeAttendance')?.checked ?? true,
+                    includeAverage:    document.getElementById('grIncludeAverage')?.checked    ?? true,
+                };
+
+                try {
+                    await window.reportsManager.loadReports();
+                    await window.reportsManager.generateGradesReportPDF(filters);
+                } catch (error) {
+                    console.error(error);
+                    if (window.app) window.app.showNotification('Error al generar el PDF de notas', 'error');
+                }
+            }
+
+            if (e.target.id === 'academicReportForm') {
+                e.preventDefault();
+                const studentId = document.getElementById('academicStudent')?.value;
+
+                if (!studentId) {
+                    if (window.app) window.app.showNotification('Seleccione un estudiante', 'error');
+                    return;
+                }
+
+                const filters = {
+                    scope:             'student',
+                    groupId:           '',
+                    studentId,
+                    includeInfo:       document.getElementById('includeStudentInfo')?.checked       ?? true,
+                    includeEvals:      document.getElementById('includePerformanceStats')?.checked  ?? true,
+                    includeAttendance: document.getElementById('includeAttendanceHistory')?.checked ?? true,
+                    includeAverage:    true,
+                };
+
+                try {
+                    await window.reportsManager.loadReports();
+                    await window.reportsManager.generateGradesReportPDF(filters);
+                } catch (error) {
+                    console.error(error);
+                    if (window.app) window.app.showNotification('Error al generar el PDF', 'error');
+                }
+            }
         });
     }
 });

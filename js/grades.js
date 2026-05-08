@@ -154,30 +154,19 @@ class GradesManager {
 
     initializeAttendanceCalendar() {
         this.selectedDates = [];
-        this.currentCalendarDate = new Date();
         this.renderAttendanceCalendar();
         this.setupAttendanceCalendarEventListeners();
     }
 
     setupAttendanceCalendarEventListeners() {
-        const prevMonthBtn = document.getElementById('gradesAttendancePrevMonth');
-        const nextMonthBtn = document.getElementById('gradesAttendanceNextMonth');
         const clearDatesBtn = document.getElementById('gradesAttendanceClearDates');
         const selectTodayBtn = document.getElementById('gradesAttendanceSelectToday');
-
-        if (prevMonthBtn) {
-            prevMonthBtn.addEventListener('click', () => {
-                this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() - 1);
-                this.renderAttendanceCalendar();
-            });
-        }
-
-        if (nextMonthBtn) {
-            nextMonthBtn.addEventListener('click', () => {
-                this.currentCalendarDate.setMonth(this.currentCalendarDate.getMonth() + 1);
-                this.renderAttendanceCalendar();
-            });
-        }
+        const addDateBtn = document.getElementById('gradesAttendanceAddDateBtn');
+        const dateInput = document.getElementById('gradesAttendanceDateInput');
+        const applyRangeBtn = document.getElementById('gradesAttendanceApplyRangeBtn');
+        const rangeStartInput = document.getElementById('gradesAttendanceRangeStart');
+        const rangeEndInput = document.getElementById('gradesAttendanceRangeEnd');
+        const exportExcelBtn = document.getElementById('gradesAttendanceExportExcelBtn');
 
         if (clearDatesBtn) {
             clearDatesBtn.addEventListener('click', () => {
@@ -192,107 +181,113 @@ class GradesManager {
         if (selectTodayBtn) {
             selectTodayBtn.addEventListener('click', () => {
                 const today = new Date();
-                const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-                
-                if (!this.selectedDates.includes(todayStr)) {
-                    this.selectedDates.push(todayStr);
-                }
-                
-                if (!this.dateColumns.includes(todayStr)) {
-                    this.dateColumns.push(todayStr);
-                }
-                
-                if (today.getMonth() !== this.currentCalendarDate.getMonth() || 
-                    today.getFullYear() !== this.currentCalendarDate.getFullYear()) {
-                    this.currentCalendarDate = new Date(today);
-                }
-                
-                this.renderAttendanceCalendar();
-                this.updateAttendanceTableHeader();
-                this.loadStudentsInAttendanceTable();
+                this.addSelectedAttendanceDate(this.formatDateForAttendance(today));
+            });
+        }
+
+        if (addDateBtn && dateInput) {
+            addDateBtn.addEventListener('click', () => {
+                if (!dateInput.value) return;
+                this.addSelectedAttendanceDate(this.formatInputDateToDisplay(dateInput.value));
+                dateInput.value = '';
+            });
+
+            dateInput.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || !dateInput.value) return;
+                event.preventDefault();
+                this.addSelectedAttendanceDate(this.formatInputDateToDisplay(dateInput.value));
+                dateInput.value = '';
+            });
+        }
+
+        if (applyRangeBtn && rangeStartInput && rangeEndInput) {
+            applyRangeBtn.addEventListener('click', () => {
+                this.applyAttendanceRangeView(rangeStartInput.value, rangeEndInput.value);
+            });
+        }
+
+        if (exportExcelBtn) {
+            exportExcelBtn.addEventListener('click', () => {
+                this.exportAllAttendanceToExcel();
             });
         }
     }
 
     renderAttendanceCalendar() {
-        const calendarGrid = document.getElementById('gradesAttendanceMonthYear');
-        const calendarBody = document.getElementById('gradesAttendanceCalendarGrid');
-        
-        if (!calendarGrid || !calendarBody) return;
-
-        const year = this.currentCalendarDate.getFullYear();
-        const month = this.currentCalendarDate.getMonth();
-        
-        const monthNames = [
-            'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-            'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-        ];
-        calendarGrid.textContent = `${monthNames[month]} de ${year}`;
-
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-        const startingDayOfWeek = firstDay.getDay();
-
-        let calendarHTML = `
-            <div class="attendance-calendar-weekdays">
-                <div>LU</div>
-                <div>MA</div>
-                <div>MI</div>
-                <div>JU</div>
-                <div>VI</div>
-                <div>SA</div>
-                <div>DO</div>
-            </div>
-            <div class="attendance-calendar-days">
-        `;
-
-        const prevMonth = new Date(year, month, 0);
-        const daysInPrevMonth = prevMonth.getDate();
-        for (let i = startingDayOfWeek - 1; i >= 0; i--) {
-            const day = daysInPrevMonth - i;
-            calendarHTML += `<div class="attendance-calendar-day prev-month" data-date="${day}">${day}</div>`;
-        }
-
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${String(day).padStart(2, '0')}-${String(month + 1).padStart(2, '0')}`;
-            const isSelected = this.selectedDates.includes(dateStr);
-            const isToday = this.isToday(year, month, day);
-            
-            calendarHTML += `
-                <div class="attendance-calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}" 
-                     data-date="${day}" 
-                     data-date-str="${dateStr}"
-                     onclick="window.gradesManager.toggleAttendanceDate('${dateStr}')">
-                    ${day}
-                </div>
-            `;
-        }
-
-        const remainingDays = 42 - (startingDayOfWeek + daysInMonth);
-        for (let day = 1; day <= remainingDays; day++) {
-            calendarHTML += `<div class="attendance-calendar-day next-month" data-date="${day}">${day}</div>`;
-        }
-
-        calendarHTML += '</div>';
-        calendarBody.innerHTML = calendarHTML;
-        
         this.updateSelectedDatesList();
     }
 
-    isToday(year, month, day) {
-        const today = new Date();
-        return today.getFullYear() === year && 
-               today.getMonth() === month && 
-               today.getDate() === day;
+    formatDateForAttendance(date) {
+        return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    getWeekNumber(date) {
-        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        const dayNum = d.getUTCDay() || 7;
-        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    formatInputDateToDisplay(inputDate) {
+        const [year, month, day] = inputDate.split('-');
+        if (!year || !month || !day) return '';
+        return `${day}-${month}`;
+    }
+
+    addSelectedAttendanceDate(dateStr) {
+        if (!dateStr) return;
+
+        if (this.selectedDates.length >= 1 && !this.selectedDates.includes(dateStr)) {
+            if (window.app) {
+                window.app.showNotification('Solo se permite una fecha por asistencia. Use "Borrar" para cambiarla.', 'error');
+            }
+            return;
+        }
+
+        this.selectedDates = [dateStr];
+        this.dateColumns = [dateStr];
+
+        this.selectedDates.sort((a, b) => {
+            const [dayA, monthA] = a.split('-');
+            const [dayB, monthB] = b.split('-');
+            const currentYear = new Date().getFullYear();
+            const dateA = new Date(currentYear, parseInt(monthA, 10) - 1, parseInt(dayA, 10));
+            const dateB = new Date(currentYear, parseInt(monthB, 10) - 1, parseInt(dayB, 10));
+            return dateA - dateB;
+        });
+
+        this.renderAttendanceCalendar();
+        this.updateAttendanceTableHeader();
+        this.loadStudentsInAttendanceTable();
+    }
+
+    applyAttendanceRangeView(rangeStart, rangeEnd) {
+        if (!rangeStart || !rangeEnd) {
+            if (window.app) {
+                window.app.showNotification('Seleccione fecha desde y hasta para ver el rango', 'error');
+            }
+            return;
+        }
+
+        const startDate = new Date(`${rangeStart}T00:00:00`);
+        const endDate = new Date(`${rangeEnd}T00:00:00`);
+
+        if (startDate > endDate) {
+            if (window.app) {
+                window.app.showNotification('La fecha inicial no puede ser mayor a la fecha final', 'error');
+            }
+            return;
+        }
+
+        const generatedRangeDates = [];
+        const cursor = new Date(startDate);
+        const maxDays = 62;
+
+        while (cursor <= endDate && generatedRangeDates.length < maxDays) {
+            generatedRangeDates.push(this.formatDateForAttendance(cursor));
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        if (generatedRangeDates.length === 0) return;
+
+        this.selectedDates = [...generatedRangeDates];
+        this.dateColumns = [...generatedRangeDates];
+        this.renderAttendanceCalendar();
+        this.updateAttendanceTableHeader();
+        this.loadStudentsInAttendanceTable();
     }
 
     hasSavedAttendanceForDate(dateStr) {
@@ -418,7 +413,13 @@ class GradesManager {
         const index = this.selectedDates.indexOf(dateStr);
         if (index > -1) {
             this.selectedDates.splice(index, 1);
+            const dateIndex = this.dateColumns.indexOf(dateStr);
+            if (dateIndex > -1) {
+                this.dateColumns.splice(dateIndex, 1);
+            }
             this.renderAttendanceCalendar();
+            this.updateAttendanceTableHeader();
+            this.loadStudentsInAttendanceTable();
         }
     }
 
@@ -676,6 +677,13 @@ class GradesManager {
             return;
         }
 
+        if (this.dateColumns.length !== 1) {
+            if (window.app) {
+                window.app.showNotification('Para guardar asistencia debe seleccionar solo un día.', 'error');
+            }
+            return;
+        }
+
         try {
             const group = groupFilter.value;
             const course = courseFilter ? courseFilter.value : '';
@@ -763,6 +771,60 @@ class GradesManager {
             console.error('Error al guardar asistencia:', error);
             if (window.app) {
                 window.app.showNotification('Error al guardar la asistencia', 'error');
+            }
+        }
+    }
+
+    exportAllAttendanceToExcel() {
+        try {
+            if (!window.XLSX) {
+                if (window.app) {
+                    window.app.showNotification('Librería de Excel no disponible', 'error');
+                }
+                return;
+            }
+
+            const allAttendanceRecords = Object.values(this.attendance || {});
+
+            if (allAttendanceRecords.length === 0) {
+                if (window.app) {
+                    window.app.showNotification('No hay datos de asistencia para exportar', 'error');
+                }
+                return;
+            }
+
+            const excelRows = allAttendanceRecords.map(record => ({
+                Fecha: record.date || '',
+                FechaVisible: record.displayDate || '',
+                Estudiante: record.studentName || '',
+                Cedula: record.studentId || '',
+                Grupo: record.group || '',
+                Materia: record.course || '',
+                Profesor: record.teacher || '',
+                Horario: record.schedule || '',
+                Asistencia: record.status || '',
+                NotaFinal: record.finalGrade || '',
+                EstadoEstudiante: record.studentStatus || '',
+                Semana: record.week || '',
+                Ano: record.year || '',
+                Actualizado: record.updatedAt || '',
+                Creado: record.createdAt || ''
+            }));
+
+            const worksheet = window.XLSX.utils.json_to_sheet(excelRows);
+            const workbook = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Asistencia');
+
+            const today = new Date().toISOString().split('T')[0];
+            window.XLSX.writeFile(workbook, `asistencia_completa_${today}.xlsx`);
+
+            if (window.app) {
+                window.app.showNotification('Excel completo generado correctamente', 'success');
+            }
+        } catch (error) {
+            console.error('Error al exportar Excel de asistencia:', error);
+            if (window.app) {
+                window.app.showNotification('Error al exportar Excel de asistencia', 'error');
             }
         }
     }

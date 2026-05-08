@@ -478,10 +478,10 @@
                                 </div>
                             </div>
 
-                            <!-- Calendar Section -->
+                            <!-- Date Selector Section -->
                             <div class="attendance-calendar-section">
                                 <div class="calendar-header-section">
-                                    <h3>Seleccionar Fechas de Asistencia</h3>
+                                    <h3>Seleccionar día de asistencia</h3>
                                     <div class="calendar-controls">
                                         <button id="gradesAttendanceClearDates" class="btn-clear">Borrar</button>
                                         <button id="gradesAttendanceSelectToday" class="btn-today">Hoy</button>
@@ -489,20 +489,25 @@
                                 </div>
                                 
                                 <div class="attendance-calendar-container">
-                                    <div class="attendance-calendar-wrapper">
-                                        <div class="attendance-calendar-header">
-                                            <span id="gradesAttendanceMonthYear">septiembre de 2025</span>
-                                            <div class="attendance-calendar-nav">
-                                                <button id="gradesAttendancePrevMonth" class="attendance-nav-btn">
-                                                    <i class="fas fa-chevron-up"></i>
-                                                </button>
-                                                <button id="gradesAttendanceNextMonth" class="attendance-nav-btn">
-                                                    <i class="fas fa-chevron-down"></i>
+                                    <div class="attendance-date-picker">
+                                        <div class="form-group compact-date-group">
+                                            <label for="gradesAttendanceDateInput">Día</label>
+                                            <div class="compact-date-input-row">
+                                                <input type="date" id="gradesAttendanceDateInput" class="compact-date-input">
+                                                <button id="gradesAttendanceAddDateBtn" class="btn-primary" type="button">
+                                                    <i class="fas fa-plus"></i> Agregar
                                                 </button>
                                             </div>
                                         </div>
-                                        <div id="gradesAttendanceCalendarGrid" class="attendance-calendar-grid">
-                                            <!-- El calendario se generará dinámicamente -->
+                                        <div class="form-group compact-date-group range-controls">
+                                            <label>Vista por rango</label>
+                                            <div class="compact-range-row">
+                                                <input type="date" id="gradesAttendanceRangeStart" class="compact-date-input" title="Desde">
+                                                <input type="date" id="gradesAttendanceRangeEnd" class="compact-date-input" title="Hasta">
+                                            </div>
+                                            <button id="gradesAttendanceApplyRangeBtn" class="btn-secondary btn-sm" type="button">
+                                                Ver Rango
+                                            </button>
                                         </div>
                                     </div>
                                     
@@ -517,6 +522,11 @@
 
                             <!-- Attendance Table with Students -->
                             <div class="table-container attendance-table-container">
+                                <div class="attendance-table-actions">
+                                    <button id="gradesAttendanceExportExcelBtn" class="btn-secondary" type="button">
+                                        <i class="fas fa-file-excel"></i> Excel lista completa
+                                    </button>
+                                </div>
                                 <table id="gradesAttendanceTable" class="data-table attendance-table">
                                     <thead>
                                         <tr>
@@ -563,6 +573,11 @@
                                 <h3><i class="fas fa-graduation-cap"></i> Historial Académico</h3>
                                 <p>Historial completo por estudiante</p>
                                 <button class="btn-primary" data-report="academic">Generar</button>
+                            </div>
+                            <div class="report-card report-card--highlight">
+                                <h3><i class="fas fa-file-alt"></i> Reporte General de Notas</h3>
+                                <p>PDF por estudiante con quizzes, exámenes, tareas, asistencia y promedio final</p>
+                                <button class="btn-primary" data-report="grades-report">Generar PDF</button>
                             </div>
                         </div>
                     </section>

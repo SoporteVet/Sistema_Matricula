@@ -1094,6 +1094,9 @@ class StudentsManager {
                 <button type="button" class="btn-secondary" onclick="window.app.closeModal()">
                     Cerrar
                 </button>
+                <button type="button" class="btn-info" onclick="window.studentsManager.generateStudentGeneralReport('${studentId}')">
+                    <i class="fas fa-file-pdf"></i> Reporte General PDF
+                </button>
                 <button type="button" class="btn-info" onclick="window.studentsManager.generateStudentCertificate('${studentId}')">
                     <i class="fas fa-file"></i> Generar Certificado
                 </button>
@@ -1236,6 +1239,331 @@ class StudentsManager {
         if (window.app) {
             window.app.showNotification('Certificado generado exitosamente', 'success');
         }
+    }
+
+    async generateStudentGeneralReport(studentId) {
+        const student = this.students[studentId];
+        if (!student) {
+            if (window.app) {
+                window.app.showNotification('No se encontró la información del estudiante', 'error');
+            }
+            return;
+        }
+
+        const jsPdfNamespace = window.jspdf || {};
+        const jsPDF = jsPdfNamespace.jsPDF;
+        if (!jsPDF) {
+            if (window.app) {
+                window.app.showNotification('La librería jsPDF no está disponible', 'error');
+            }
+            return;
+        }
+
+        try {
+            const reportData = await this.getStudentGeneralReportData(studentId);
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+            const fullName = student.fullName ||
+                (student.firstName && student.lastName ? `${student.firstName} ${student.lastName}` :
+                (student.firstName || student.lastName || 'N/A'));
+            const studentCode = student.studentId || 'N/A';
+            const generatedAt = new Date().toLocaleString('es-CR');
+            const logoDataUrl = await this.getCertificateLogoDataUrl();
+
+            const evaluationsRowsHtml = reportData.evaluationRows.length
+                ? reportData.evaluationRows.map(item => `
+                    <tr>
+                        <td>${item.title}</td>
+                        <td>${item.type}</td>
+                        <td class="num">${item.scoreLabel}</td>
+                        <td class="num">${item.maxScoreLabel}</td>
+                        <td>${item.dateLabel}</td>
+                        <td class="num">${item.weightLabel}</td>
+                    </tr>
+                `).join('')
+                : `
+                    <tr>
+                        <td colspan="6" class="empty">No hay evaluaciones o notas registradas para este estudiante.</td>
+                    </tr>
+                `;
+
+            const reportTemplate = document.createElement('div');
+            reportTemplate.style.position = 'fixed';
+            reportTemplate.style.left = '0';
+            reportTemplate.style.top = '0';
+            reportTemplate.style.width = '760px';
+            reportTemplate.style.opacity = '0';
+            reportTemplate.style.pointerEvents = 'none';
+            reportTemplate.style.zIndex = '-1';
+            reportTemplate.style.background = '#ffffff';
+            reportTemplate.innerHTML = `
+                <style>
+                    .pdf-wrap { font-family: Arial, sans-serif; color: #1f2937; padding: 22px 26px; }
+                    .pdf-header { border: 1px solid #dbe7ff; background: #f7faff; border-radius: 10px; padding: 14px; display: flex; gap: 14px; align-items: center; }
+                    .pdf-logo { width: 54px; height: 54px; object-fit: contain; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; }
+                    .pdf-title { margin: 0; font-size: 14px; color: #1d4ed8; font-weight: 700; letter-spacing: .3px; }
+                    .pdf-subtitle { margin: 4px 0 0; font-size: 20px; color: #0f172a; font-weight: 700; }
+                    .pdf-date { margin: 4px 0 0; font-size: 12px; color: #0f766e; }
+                    .section { margin-top: 16px; }
+                    .section-title { font-size: 14px; font-weight: 700; color: #1d4ed8; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid #dbe7ff; }
+                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; background: #f8fbff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+                    .info-item { font-size: 12px; }
+                    .info-item b { color: #111827; }
+                    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+                    .metric { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #fff; }
+                    .metric .label { font-size: 11px; color: #64748b; }
+                    .metric .value { font-size: 16px; color: #0f172a; font-weight: 700; margin-top: 4px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                    thead th { text-align: left; padding: 8px; background: #eaf1ff; color: #1e3a8a; border-bottom: 1px solid #c7d7ff; }
+                    tbody td { padding: 8px; border-bottom: 1px solid #edf2f7; }
+                    tbody tr:nth-child(even) { background: #fafcff; }
+                    .num { text-align: center; }
+                    .empty { text-align: center; color: #64748b; font-style: italic; }
+                    .assist { font-size: 12px; line-height: 1.5; color: #334155; background: #f8fbff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+                    .pdf-footer { margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 10px; color: #6b7280; }
+                </style>
+                <div class="pdf-wrap">
+                    <div class="pdf-header">
+                        ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Logo Instituto" class="pdf-logo">` : ''}
+                        <div>
+                            <h3 class="pdf-title">INSTITUTO VETERINARIO SAN MARTIN DE PORRES</h3>
+                            <p class="pdf-subtitle">Reporte General Academico</p>
+                            <p class="pdf-date">Generado: ${generatedAt}</p>
+                        </div>
+                    </div>
+
+                    <section class="section">
+                        <h4 class="section-title">Informacion del Estudiante</h4>
+                        <div class="info-grid">
+                            <div class="info-item"><b>Estudiante:</b> ${fullName}</div>
+                            <div class="info-item"><b>ID Estudiante:</b> ${studentCode}</div>
+                            <div class="info-item"><b>Cedula:</b> ${student.cedula || 'N/A'}</div>
+                            <div class="info-item"><b>Grupo:</b> ${student.group || 'N/A'}</div>
+                            <div class="info-item"><b>Nivel Academico:</b> ${student.course || 'N/A'}</div>
+                            <div class="info-item"><b>Estado:</b> ${this.getStatusText(student.status)}</div>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <h4 class="section-title">Resumen General</h4>
+                        <div class="summary-grid">
+                            <div class="metric"><div class="label">Promedio Academico</div><div class="value">${reportData.academicSummary.averageLabel}</div></div>
+                            <div class="metric"><div class="label">Evaluaciones Registradas</div><div class="value">${reportData.academicSummary.totalEvaluations}</div></div>
+                            <div class="metric"><div class="label">Porcentaje Asistencia</div><div class="value">${reportData.attendanceSummary.percentageLabel}</div></div>
+                            <div class="metric"><div class="label">Asistencia (P)</div><div class="value">${reportData.attendanceSummary.presentCount}</div></div>
+                            <div class="metric"><div class="label">Ausencias (A)</div><div class="value">${reportData.attendanceSummary.absentCount}</div></div>
+                            <div class="metric"><div class="label">Tardias (T)</div><div class="value">${reportData.attendanceSummary.lateCount}</div></div>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <h4 class="section-title">Detalle de Evaluaciones</h4>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Evaluacion</th>
+                                    <th>Tipo</th>
+                                    <th class="num">Nota</th>
+                                    <th class="num">Max</th>
+                                    <th>Fecha</th>
+                                    <th class="num">Peso</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${evaluationsRowsHtml}
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section class="section">
+                        <h4 class="section-title">Detalle de Asistencia</h4>
+                        <div class="assist">
+                            <div><b>Registros Totales:</b> ${reportData.attendanceSummary.totalCount}</div>
+                            <div><b>Ultima Fecha:</b> ${reportData.attendanceSummary.latestDate || 'N/A'}</div>
+                            <div><b>Nota Final Asistencia:</b> ${reportData.attendanceSummary.latestFinalGrade || 'N/A'}</div>
+                            <div><b>Resumen:</b> P=${reportData.attendanceSummary.presentCount}, A=${reportData.attendanceSummary.absentCount}, T=${reportData.attendanceSummary.lateCount}, CONGELADO=${reportData.attendanceSummary.frozenCount}</div>
+                        </div>
+                    </section>
+
+                    <div class="pdf-footer">
+                        Documento generado automaticamente por el Sistema de Gestion Academica
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(reportTemplate);
+
+            if (!window.html2canvas) {
+                document.body.removeChild(reportTemplate);
+                if (window.app) {
+                    window.app.showNotification('Falta cargar html2canvas para exportar PDF con CSS', 'error');
+                }
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 60));
+
+            const canvas = await window.html2canvas(reportTemplate, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                logging: false
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdfWidth = doc.internal.pageSize.getWidth();
+            const pdfHeight = doc.internal.pageSize.getHeight();
+            const margin = 20;
+            const usableWidth = pdfWidth - (margin * 2);
+            const usableHeight = pdfHeight - (margin * 2);
+            const imgHeight = (canvas.height * usableWidth) / canvas.width;
+
+            let remainingHeight = imgHeight;
+            let positionY = margin;
+
+            doc.addImage(imgData, 'PNG', margin, positionY, usableWidth, imgHeight);
+            remainingHeight -= usableHeight;
+
+            while (remainingHeight > 0) {
+                doc.addPage();
+                positionY = margin - (imgHeight - remainingHeight);
+                doc.addImage(imgData, 'PNG', margin, positionY, usableWidth, imgHeight);
+                remainingHeight -= usableHeight;
+            }
+
+            const safeName = (fullName || 'estudiante').replace(/[^\w\-]+/g, '_');
+            doc.save(`reporte_general_${studentCode || safeName}.pdf`);
+
+            document.body.removeChild(reportTemplate);
+
+            if (window.app) {
+                window.app.showNotification('Reporte general en PDF generado correctamente', 'success');
+            }
+        } catch (error) {
+            console.error('Error al generar reporte general del estudiante:', error);
+            if (window.app) {
+                window.app.showNotification('Error al generar el reporte general del estudiante', 'error');
+            }
+        }
+    }
+
+    async getStudentGeneralReportData(studentKey) {
+        const [gradesSnapshot, evaluationsSnapshot, attendanceSnapshot] = await Promise.all([
+            get(ref(db, 'grades')),
+            get(ref(db, 'evaluations')),
+            get(ref(db, 'attendance'))
+        ]);
+
+        const grades = gradesSnapshot.exists() ? gradesSnapshot.val() : {};
+        const evaluations = evaluationsSnapshot.exists() ? evaluationsSnapshot.val() : {};
+        const attendance = attendanceSnapshot.exists() ? attendanceSnapshot.val() : {};
+        const student = this.students[studentKey];
+        const studentPublicId = student.studentId;
+
+        const studentGrades = Object.values(grades).filter(grade =>
+            grade.studentId === studentPublicId || grade.studentId === studentKey
+        );
+
+        const evaluationRows = studentGrades.map((grade) => {
+            const evaluation = evaluations[grade.evaluationId] || {};
+            return {
+                title: evaluation.title || 'Evaluación',
+                type: this.getEvaluationTypeText(evaluation.type),
+                score: Number(grade.score) || 0,
+                maxScore: Number(evaluation.maxScore) || 100,
+                dateLabel: evaluation.date ? this.formatDate(evaluation.date) : 'N/A',
+                weight: Number(evaluation.weight) || 0,
+                scoreLabel: `${Number(grade.score) || 0}`,
+                maxScoreLabel: `${Number(evaluation.maxScore) || 100}`,
+                weightLabel: `${Number(evaluation.weight) || 0}%`
+            };
+        });
+
+        const weightedAverage = this.calculateWeightedAverage(evaluationRows);
+
+        const studentAttendance = Object.values(attendance).filter(record =>
+            record.studentId === studentKey || record.studentId === studentPublicId
+        );
+
+        const attendanceSummary = this.buildAttendanceSummary(studentAttendance);
+
+        return {
+            evaluationRows,
+            academicSummary: {
+                totalEvaluations: evaluationRows.length,
+                average: weightedAverage,
+                averageLabel: weightedAverage !== null ? `${weightedAverage.toFixed(2)} / 100` : 'N/A'
+            },
+            attendanceSummary
+        };
+    }
+
+    calculateWeightedAverage(evaluationRows) {
+        if (!evaluationRows.length) return null;
+
+        const totalWeight = evaluationRows.reduce((sum, row) => sum + row.weight, 0);
+        if (totalWeight > 0) {
+            const weighted = evaluationRows.reduce((sum, row) => {
+                const normalized = row.maxScore > 0 ? (row.score / row.maxScore) * 100 : 0;
+                return sum + (normalized * row.weight / 100);
+            }, 0);
+            return weighted;
+        }
+
+        const simple = evaluationRows.reduce((sum, row) => {
+            const normalized = row.maxScore > 0 ? (row.score / row.maxScore) * 100 : 0;
+            return sum + normalized;
+        }, 0);
+        return simple / evaluationRows.length;
+    }
+
+    buildAttendanceSummary(attendanceRows) {
+        const summary = {
+            totalCount: attendanceRows.length,
+            presentCount: 0,
+            absentCount: 0,
+            lateCount: 0,
+            frozenCount: 0,
+            latestDate: null,
+            latestFinalGrade: null,
+            percentage: 0,
+            percentageLabel: '0%'
+        };
+
+        attendanceRows.forEach((record) => {
+            const status = String(record.status || '').toUpperCase();
+            if (status === 'P') summary.presentCount += 1;
+            if (status === 'A') summary.absentCount += 1;
+            if (status === 'T') summary.lateCount += 1;
+            if (status === 'CONGELADO') summary.frozenCount += 1;
+
+            if (record.date && (!summary.latestDate || new Date(record.date) > new Date(summary.latestDate))) {
+                summary.latestDate = record.date;
+                summary.latestFinalGrade = record.finalGrade || null;
+            }
+        });
+
+        if (summary.totalCount > 0) {
+            summary.percentage = (summary.presentCount / summary.totalCount) * 100;
+            summary.percentageLabel = `${summary.percentage.toFixed(1)}%`;
+            if (summary.latestDate) {
+                summary.latestDate = this.formatDate(summary.latestDate);
+            }
+        }
+
+        return summary;
+    }
+
+    getEvaluationTypeText(type) {
+        const typeMap = {
+            exam: 'Examen',
+            assignment: 'Tarea',
+            project: 'Proyecto',
+            participation: 'Participación',
+            attendance: 'Asistencia',
+            quiz: 'Quiz',
+            lab: 'Laboratorio'
+        };
+        return typeMap[type] || type || 'N/A';
     }
 
     getStatusText(status) {
